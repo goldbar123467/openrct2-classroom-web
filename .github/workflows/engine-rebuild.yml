@@ -22,7 +22,7 @@ jobs:
 
       - name: Rebuild exact JS and WASM from pinned source
         shell: pwsh
-        run: ./scripts/rebuild-engine.ps1 -VerifyContract
+        run: ./scripts/rebuild-engine.ps1 -VerifyManifest
 
       - name: Install exact launcher dependencies
         run: npm ci
