@@ -34,7 +34,9 @@ test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ p
   expect(consoleErrors).toEqual([]);
 });
 
-test("production-shaped shell boots Lite engine, persists a save, and reloads offline", async ({ context, page }) => {
+test("production-shaped shell boots Lite engine, persists a save, and reloads offline", async ({ baseURL, context, page }) => {
+  if (!baseURL) throw new Error("Playwright baseURL is required for the classroom flow.");
+  const expectedOrigin = new URL(baseURL).origin;
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
   const requestOrigins = new Set<string>();
@@ -64,7 +66,7 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
   await expect(page.locator("#worker-value")).toHaveText("2");
   await expect(page.locator("#storage-status")).toContainText(/MB of|GB of|Available|Persistent/);
   await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
-  expect([...requestOrigins]).toEqual(["http://127.0.0.1:4173"]);
+  expect([...requestOrigins]).toEqual([expectedOrigin]);
   expect(consoleErrors).toEqual([]);
 
   await page.evaluate(async () => {
@@ -170,7 +172,7 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
       entries: entries.flat(),
     };
   });
-  expect(cacheSnapshot.controller).toBe("http://127.0.0.1:4173/sw.js");
+  expect(cacheSnapshot.controller).toBe(`${expectedOrigin}/sw.js`);
   expect(cacheSnapshot.entries).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ url: expect.stringMatching(/\/assets\/.*\.js$/), status: 200 }),

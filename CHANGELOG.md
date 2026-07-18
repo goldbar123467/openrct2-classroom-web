@@ -12,3 +12,4 @@
 - Added atomic in-memory save export/restore/rollback integration coverage and hostile licensed-ZIP import transactions.
 - Added Playwright/axe verification for keyboard use, 200% effective viewport, forced colors, reduced motion, exact Lite engine boot, same-origin networking, and full offline reload.
 - Added dependency audit, full-history secret scan, license policy, CycloneDX SBOM validation, security-header parity, and deterministic distribution hashes for release evidence.
+- Added reusable HTTPS production probes and stopped emitting unconsumed browser source maps so every release-manifest file is publicly verifiable.

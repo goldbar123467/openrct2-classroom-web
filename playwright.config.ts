@@ -1,5 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "");
+if (externalBaseURL && new URL(externalBaseURL).protocol !== "https:") {
+  throw new Error("PLAYWRIGHT_BASE_URL must use HTTPS for an external production probe.");
+}
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -11,17 +16,19 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   use: {
     ...devices["Desktop Chrome"],
-    baseURL: "http://127.0.0.1:4173",
+    baseURL: externalBaseURL ?? "http://127.0.0.1:4173",
     locale: "en-US",
     screenshot: "only-on-failure",
     trace: "on-first-retry",
     video: "retain-on-failure",
     viewport: { width: 1366, height: 768 },
   },
-  webServer: {
-    command: "npm run preview -- --host 127.0.0.1 --port 4173",
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-    url: "http://127.0.0.1:4173",
-  },
+  webServer: externalBaseURL
+    ? undefined
+    : {
+        command: "npm run preview -- --host 127.0.0.1 --port 4173",
+        reuseExistingServer: !process.env.CI,
+        timeout: 60_000,
+        url: "http://127.0.0.1:4173",
+      },
 });
