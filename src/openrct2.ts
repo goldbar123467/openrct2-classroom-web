@@ -20,51 +20,73 @@ const SCHOOL_MAGIC_MOUNTAIN_PARK_PATH = "/RCT/Scenarios/Six Flags Magic Mountain
 const SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH = "/persistent/save/Six Flags Magic Mountain Browser Sandbox.park";
 const SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER = "/RCT/.parkworks-magic-mountain-patch";
 
-export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxDelayTicks = -1;
-var schoolSandboxStep = 0;
-
-function scheduleSchoolSandbox() {
-    schoolSandboxDelayTicks = 1200;
-    schoolSandboxStep = 0;
+const CRC32_TABLE = new Uint32Array(256);
+for (let index = 0; index < CRC32_TABLE.length; index += 1) {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  CRC32_TABLE[index] = value >>> 0;
 }
 
-function applySchoolSandbox() {
-    if (schoolSandboxDelayTicks < 0 || context.mode !== "normal") {
+export function crc32(data: Uint8Array): number {
+  let value = 0xffffffff;
+  for (const byte of data) {
+    value = (CRC32_TABLE[(value ^ byte) & 0xff] ?? 0) ^ (value >>> 8);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxRun = 0;
+
+function scheduleSchoolSandbox() {
+    schoolSandboxRun += 1;
+    var run = schoolSandboxRun;
+    context.setTimeout(function () {
+        applySchoolSandbox(run, 0);
+    }, 250);
+}
+
+function applySchoolSandbox(run, step) {
+    if (run !== schoolSandboxRun) {
         return;
     }
 
-    if (schoolSandboxDelayTicks > 0) {
-        schoolSandboxDelayTicks -= 1;
+    if (context.mode !== "normal") {
+        context.setTimeout(function () {
+            applySchoolSandbox(run, step);
+        }, 250);
         return;
     }
 
-    if (schoolSandboxStep === 0) {
+    if (step === 0) {
         park.cash = 1000000000;
-    } else if (schoolSandboxStep === 1) {
+    } else if (step === 1) {
+        park.setFlag("noMoney", true);
+    } else if (step === 2) {
         cheats.sandboxMode = true;
-    } else if (schoolSandboxStep === 2) {
+    } else if (step === 3) {
         cheats.ignoreResearchStatus = true;
-    } else if (schoolSandboxStep === 3) {
+    } else if (step === 4) {
         park.research.funding = 0;
     } else {
+        context.paused = false;
         park.postMessage({
             type: "blank",
-            text: "School Sandbox active: $100 million, sandbox tools, and all research unlocked."
+            text: "School Sandbox active: unlimited money, sandbox tools, and all research unlocked."
         });
-        schoolSandboxDelayTicks = -1;
         return;
     }
 
-    schoolSandboxStep += 1;
-    schoolSandboxDelayTicks = 8;
+    context.setTimeout(function () {
+        applySchoolSandbox(run, step + 1);
+    }, 50);
 }
 
 function main() {
     context.subscribe("map.changed", function () {
         scheduleSchoolSandbox();
     });
-    context.subscribe("interval.tick", applySchoolSandbox);
-
     if (context.mode === "normal") {
         scheduleSchoolSandbox();
     }
@@ -72,7 +94,7 @@ function main() {
 
 registerPlugin({
     name: "Parkworks School Sandbox",
-    version: "1.0.2",
+    version: "1.1.0",
     authors: ["Parkworks"],
     type: "intransient",
     licence: "MIT",
@@ -355,15 +377,21 @@ async function installOpenAssets(module: OpenRct2Module, reporter: ProgressRepor
 
 function mountPersistentFileSystems(module: OpenRct2Module): void {
   const fs = module.FS;
-  for (const path of ["/persistent", "/RCT", "/RCT-staging", "/OpenRCT2"]) {
+  const mounts = [
+    { path: "/persistent", autoPersist: true },
+    { path: "/RCT", autoPersist: false },
+    { path: "/OpenRCT2", autoPersist: false },
+  ];
+  for (const { path, autoPersist } of mounts) {
     try {
       if (!pathExists(fs, path)) fs.mkdir(path);
-      fs.mount(fs.filesystems.IDBFS, { autoPersist: true }, path);
+      fs.mount(fs.filesystems.IDBFS, autoPersist ? { autoPersist: true } : {}, path);
     } catch (error) {
       console.error(`Failed to mount browser storage at ${path}`, error);
       throw new Error(`Local browser storage could not be mounted at ${path}: ${describeUnknownError(error)}`);
     }
   }
+  if (!pathExists(fs, "/RCT-staging")) fs.mkdir("/RCT-staging");
 }
 
 function registerSaveFlush(module: OpenRct2Module): void {
@@ -453,7 +481,10 @@ export async function importRctArchive(
   await ensureImportCapacity(file);
 
   reporter({ phase: "game-assets", message: "Reading your RCT2 ZIP…", loaded: 0, total: file.size });
-  const archive = await JSZip.loadAsync(file, { checkCRC32: true });
+  // JSZip's checkCRC32 option inflates every entry once during load and again
+  // when it is read. Validate the central-directory CRC during the single
+  // extraction pass instead; this halves work for the 700+ MB school package.
+  const archive = await JSZip.loadAsync(file);
   const allEntries = Object.values(archive.files);
   if (allEntries.length > MAX_RCT_ENTRIES) throw new Error("That ZIP contains too many files for the classroom importer.");
   const root = findRctRoot(allEntries.map((entry) => entry.name));
@@ -476,6 +507,11 @@ export async function importRctArchive(
     const relative = safeRelativeZipPath(entry.name, root);
     if (!relative) continue;
     const data = await entry.async("uint8array");
+    const expectedCrc32 = (entry as typeof entry & { _data?: { crc32?: number } })._data?.crc32;
+    if (typeof expectedCrc32 !== "number" || crc32(data) !== (expectedCrc32 >>> 0)) {
+      clearTree(fs, "/RCT-staging");
+      throw new Error(`The ZIP entry ${entry.name} failed its CRC integrity check.`);
+    }
     expandedBytes += data.byteLength;
     if (expandedBytes > MAX_RCT_UNCOMPRESSED_BYTES) {
       clearTree(fs, "/RCT-staging");
@@ -511,7 +547,6 @@ export async function importRctArchive(
   }
   await syncFileSystem(module);
   clearTree(fs, "/RCT-staging");
-  await syncFileSystem(module);
   await navigator.storage?.persist?.();
   localStorage.setItem(
     "parkworks.rctImport",
@@ -575,8 +610,7 @@ export async function installSchoolSandboxPlugin(module: OpenRct2Module): Promis
 }
 
 export function hasSchoolScenarioPatch(module: OpenRct2Module, version: string): boolean {
-  if (!version || !pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PARK_PATH)) return false;
-  if (!pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH)) return false;
+  if (!version || !pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH)) return false;
   if (!pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER)) return false;
   const marker = module.FS.readFile(SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER, { encoding: "utf8" });
   return (typeof marker === "string" ? marker : new TextDecoder().decode(marker)) === version;
@@ -597,10 +631,12 @@ export async function installSchoolScenarioPatch(
 
   ensureDirectory(module.FS, "/RCT/Scenarios");
   ensureDirectory(module.FS, "/persistent/save");
-  module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_PARK_PATH, bytes);
   module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH, bytes);
   if (pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_SC6_PATH)) {
     module.FS.unlink(SCHOOL_MAGIC_MOUNTAIN_SC6_PATH);
+  }
+  if (pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PARK_PATH)) {
+    module.FS.unlink(SCHOOL_MAGIC_MOUNTAIN_PARK_PATH);
   }
   module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER, version);
   await syncFileSystem(module);

@@ -5,3 +5,6 @@
 - Deliver licensed assets only through the password-protected school deployment or the separately controlled school server described in `deploy/README.md`.
 - Do not weaken or remove the password gate, private/no-store headers, same-origin restriction, or licensed-route service-worker exclusion.
 - OpenRCT2 source, patches, notices, and reproducible build metadata remain public under their existing open-source terms.
+- Use Windows Computer Use for final live QA and human-style playtests. Do not treat headless checks, DOM assertions, or static screenshots as the sole proof that the game is playable; visibly exercise the native canvas controls. Never automate authentication or password-manager dialogs.
+- Run the complete production-shaped E2E suite for release changes, then perform a representative human play session that covers mouse, keyboard, native windows, construction entry, save/reload, and sustained animation on the exact live commit.
+- Maintain `docs/LIVE_QA_WORKLOG.md` as the durable handoff memory for active live-release diagnosis, exact release identity, test coverage, failures, and visual evidence. Update it when the diagnosis or verified release changes.

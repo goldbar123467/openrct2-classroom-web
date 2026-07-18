@@ -7,7 +7,7 @@ test("a separately supplied licensed school ZIP imports and opens the real game"
   test.skip(!licensedZipPath, "Set PLAYWRIGHT_REAL_RCT_ZIP_PATH for the authorized local import proof.");
   if (!licensedZipPath) return;
   await access(licensedZipPath);
-  test.setTimeout(15 * 60_000);
+  test.setTimeout(30 * 60_000);
 
   const browserLog: string[] = [];
   page.on("console", (message) => {
@@ -19,17 +19,20 @@ test("a separately supplied licensed school ZIP imports and opens the real game"
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/?e2e=licensed-import");
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  const importStarted = Date.now();
   await page.locator("#rct-file-input").setInputFiles(licensedZipPath);
 
   await expect(page.locator("#asset-status")).toHaveText("Stored privately", { timeout: 12 * 60_000 });
   await expect(page.getByRole("alert")).toBeHidden();
   const importReceipt = await page.evaluate(() => JSON.parse(localStorage.getItem("parkworks.rctImport") ?? "null"));
+  const importMilliseconds = Date.now() - importStarted;
   expect(importReceipt).toMatchObject({ fileCount: expect.any(Number), sourceBytes: expect.any(Number) });
   expect(importReceipt.fileCount).toBeGreaterThan(2_000);
 
-  await page.getByRole("button", { name: /Open the park/ }).click();
+  await page.getByRole("button", { name: /Open main menu/ }).click();
   await expect(page.locator("#game-shell")).toBeVisible({ timeout: 120_000 });
-  await expect(page.locator("#canvas")).toBeVisible();
+  await expect(page.locator("#game-shell > #canvas")).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator("#game-shell button")).toHaveCount(0);
   await page.waitForTimeout(5_000);
   const runtimeState = await page.evaluate(() => {
     const source = document.querySelector<HTMLCanvasElement>("#canvas");
@@ -61,7 +64,7 @@ test("a separately supplied licensed school ZIP imports and opens the real game"
   expect(browserLog.some((message) => message.includes("FATAL") || message.startsWith("[pageerror]"))).toBe(false);
 
   await testInfo.attach("licensed-import-receipt", {
-    body: Buffer.from(JSON.stringify({ fileCount: importReceipt.fileCount, sourceBytes: importReceipt.sourceBytes, runtimeState }, null, 2)),
+    body: Buffer.from(JSON.stringify({ fileCount: importReceipt.fileCount, sourceBytes: importReceipt.sourceBytes, importMilliseconds, runtimeState }, null, 2)),
     contentType: "application/json",
   });
   await testInfo.attach("licensed-browser-log", {

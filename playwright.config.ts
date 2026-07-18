@@ -32,7 +32,7 @@ export default defineConfig({
     ? undefined
     : {
         command: `npm run preview -- --host 127.0.0.1 --port ${localPort} --strictPort`,
-        reuseExistingServer: !process.env.CI && !process.env.PLAYWRIGHT_LOCAL_PORT,
+        reuseExistingServer: process.env.PLAYWRIGHT_REUSE_SERVER === "1",
         timeout: 60_000,
         url: localBaseURL,
       },

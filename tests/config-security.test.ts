@@ -55,21 +55,29 @@ describe("production security configuration", () => {
 
   it("starts OpenRCT2 with the imported licensed-data directory", () => {
     const source = readFileSync("src/openrct2.ts", "utf8");
+    const launcher = readFileSync("src/main.ts", "utf8");
     expect(source).toContain('"--openrct2-data-path=/OpenRCT2/"');
     expect(source).toContain('"--rct2-data-path=/RCT/"');
     expect(source).toContain("...(openMagicMountain ? [SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH] : [])");
     expect(source).not.toContain("chooseStartupScenario");
-    expect(source).toContain('"/RCT/Scenarios/Six Flags Magic Mountain.park"');
+    expect(source).toContain('"/persistent/save/Six Flags Magic Mountain Browser Sandbox.park"');
     expect(source).not.toContain('GAME_STARTUP_ARGUMENTS, "/RCT/Scenarios');
+    expect(launcher).toContain('id="play-button-label">Open main menu');
+    expect(launcher).toContain('id="magic-mountain-button"');
+    expect(launcher).toContain("launchGame(openMagicMountainFromQuery)");
+    expect(launcher).toContain("launchGame(true)");
   });
 
   it("installs the native school sandbox policy without embedding licensed assets", () => {
     const source = readFileSync("src/openrct2.ts", "utf8");
     expect(source).toContain("park.cash = 1000000000");
+    expect(source).toContain('park.setFlag("noMoney", true)');
     expect(source).toContain("cheats.sandboxMode = true");
     expect(source).toContain("cheats.ignoreResearchStatus = true");
+    expect(source).toContain("context.paused = false");
+    expect(source).not.toContain('context.subscribe("interval.tick"');
     expect(source).toContain("park.research.funding = 0");
-    expect(source).not.toContain("park.setFlag");
+    expect(source).not.toContain('park.setFlag("forbidLandscapeChanges"');
     expect(source).not.toContain("research.inventedItems");
     expect(source).not.toContain("research.uninventedItems");
     expect(source).toContain('type: "intransient"');

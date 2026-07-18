@@ -36,7 +36,7 @@ const configuredSchoolAssetUrl = import.meta.env.VITE_SCHOOL_ASSET_URL?.trim() ?
 const configuredSchoolAssetVersion = import.meta.env.VITE_SCHOOL_ASSET_VERSION?.trim() ?? "";
 const configuredSchoolScenarioPatchUrl = import.meta.env.VITE_SCHOOL_SCENARIO_PATCH_URL?.trim() ?? "";
 const configuredSchoolScenarioPatchVersion = import.meta.env.VITE_SCHOOL_SCENARIO_PATCH_VERSION?.trim() ?? "";
-const openMagicMountain = new URLSearchParams(window.location.search).get("park") === "magic-mountain";
+const openMagicMountainFromQuery = new URLSearchParams(window.location.search).get("park") === "magic-mountain";
 
 function resolveSchoolAssetUrl(value: string): URL | null {
   if (!value) return null;
@@ -128,7 +128,11 @@ app.innerHTML = `
           <input class="visually-hidden" id="rct-file-input" type="file" accept=".zip,application/zip" />
           <button class="ticket-button ticket-button-primary" id="play-button" type="button">
             <span aria-hidden="true">▶</span>
-            <span><b>Open the park</b><small id="play-button-copy">Prepare this Chromebook</small></span>
+            <span><b id="play-button-label">Open main menu</b><small id="play-button-copy">Prepare this Chromebook</small></span>
+          </button>
+          <button class="ticket-button ticket-button-secondary" id="magic-mountain-button" type="button" hidden>
+            <span aria-hidden="true">★</span>
+            <span><b>Play Magic Mountain</b><small>Running unlimited sandbox</small></span>
           </button>
         </div>
 
@@ -258,6 +262,7 @@ const progressTrack = byId<HTMLElement>("progress-track");
 const progressTrain = byId<HTMLElement>("progress-train");
 const errorMessage = byId<HTMLParagraphElement>("error-message");
 const playButton = byId<HTMLButtonElement>("play-button");
+const magicMountainButton = byId<HTMLButtonElement>("magic-mountain-button");
 const rctFileInput = byId<HTMLInputElement>("rct-file-input");
 const primaryActions = byId<HTMLDivElement>("primary-actions");
 const manualFileAction = byId<HTMLLabelElement>("manual-file-action");
@@ -293,6 +298,7 @@ function setError(error: unknown): void {
   errorMessage.hidden = false;
   progressDepot.hidden = true;
   playButton.disabled = false;
+  magicMountainButton.disabled = false;
 }
 
 function clearError(): void {
@@ -343,7 +349,12 @@ function renderImportedState(imported: boolean): void {
   byId<HTMLElement>("step-assets").classList.toggle("is-complete", imported);
   byId<HTMLElement>("step-assets").classList.toggle("is-active", !imported);
   byId<HTMLElement>("step-play").classList.toggle("is-active", imported);
-  byId<HTMLElement>("play-button-copy").textContent = imported ? "Resume from local storage" : "Prepare this Chromebook";
+  byId<HTMLElement>("play-button-label").textContent = openMagicMountainFromQuery ? "Play Magic Mountain" : "Open main menu";
+  byId<HTMLElement>("play-button-copy").textContent = imported
+    ? openMagicMountainFromQuery
+      ? "Running unlimited sandbox"
+      : "Scenarios, saves, and editors"
+    : "Prepare this Chromebook";
   byId<HTMLElement>("save-light").classList.toggle("is-on", imported);
 }
 
@@ -351,6 +362,7 @@ function configureSchoolDelivery(): void {
   const downloadCopy = byId<HTMLElement>("download-step-copy");
   if (!schoolAssetUrl) {
     schoolDeliveryNote.hidden = true;
+    magicMountainButton.hidden = true;
     manualFileAction.hidden = false;
     rctFileInput.disabled = false;
     rctFileInput.removeAttribute("aria-hidden");
@@ -362,6 +374,8 @@ function configureSchoolDelivery(): void {
     return;
   }
   schoolDeliveryNote.hidden = false;
+  magicMountainButton.hidden =
+    openMagicMountainFromQuery || !schoolScenarioPatchUrl || !configuredSchoolScenarioPatchVersion;
   manualFileAction.hidden = true;
   rctFileInput.disabled = true;
   rctFileInput.setAttribute("aria-hidden", "true");
@@ -446,6 +460,7 @@ async function ensureEngine(): Promise<OpenRct2Module> {
   if (moduleInstance) return moduleInstance;
   if (initializePromise) return initializePromise;
   playButton.disabled = true;
+  magicMountainButton.disabled = true;
   initializePromise = initializeOpenRct2(selectedProfile, reportProgress)
     .then(async (module) => {
       moduleInstance = module;
@@ -457,11 +472,13 @@ async function ensureEngine(): Promise<OpenRct2Module> {
       await updateOfflineCacheStatus();
       progressDepot.hidden = true;
       playButton.disabled = false;
+      magicMountainButton.disabled = false;
       return module;
     })
     .catch((error) => {
       initializePromise = null;
       playButton.disabled = false;
+      magicMountainButton.disabled = false;
       throw error;
     });
   return initializePromise;
@@ -510,7 +527,7 @@ profileSelect.addEventListener("change", () => {
   renderProfile(next);
 });
 
-playButton.addEventListener("click", async () => {
+async function launchGame(openMagicMountain: boolean): Promise<void> {
   try {
     const module = await ensureEngine();
     if (!hasRctData(module) && schoolAssetUrl) await installSchoolArchive(module);
@@ -531,7 +548,10 @@ playButton.addEventListener("click", async () => {
     console.error("OpenRCT2 startup failed", error);
     setError(error);
   }
-});
+}
+
+playButton.addEventListener("click", () => void launchGame(openMagicMountainFromQuery));
+magicMountainButton.addEventListener("click", () => void launchGame(true));
 
 rctFileInput.addEventListener("change", async () => {
   const file = rctFileInput.files?.[0];

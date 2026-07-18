@@ -372,6 +372,10 @@ h1 em {
   grid-template-columns: 1fr 1.1fr;
 }
 
+.primary-actions.has-school-download .school-delivery-note {
+  grid-column: 1 / -1;
+}
+
 .school-delivery-note {
   display: flex;
   min-height: 68px;

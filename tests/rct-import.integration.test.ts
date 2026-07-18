@@ -4,6 +4,7 @@ import { MAX_RCT_ZIP_BYTES } from "../src/engine-utils";
 import {
   SCHOOL_SANDBOX_PLUGIN,
   clearRctData,
+  crc32,
   hasSchoolScenarioPatch,
   hasRctData,
   importRctArchive,
@@ -54,6 +55,10 @@ describe("licensed RCT2 archive transaction", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it("validates ZIP entries with the standard CRC-32 checksum in one extraction pass", () => {
+    expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
+  });
+
   it("installs a valid synthetic structure through staging and removes it on request", async () => {
     const module = createMemoryModule();
     const fs = module.FS as MemoryFs;
@@ -82,26 +87,28 @@ describe("licensed RCT2 archive transaction", () => {
 
     expect(fs.readFile("/persistent/plugin/parkworks-school-sandbox.js", { encoding: "utf8" }))
       .toBe(SCHOOL_SANDBOX_PLUGIN);
-    expect(SCHOOL_SANDBOX_PLUGIN).toContain("schoolSandboxDelayTicks = 1200");
-    expect(SCHOOL_SANDBOX_PLUGIN).toContain("schoolSandboxStep += 1");
-    expect(SCHOOL_SANDBOX_PLUGIN).not.toContain("park.setFlag");
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain("context.setTimeout");
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain('park.setFlag("noMoney", true)');
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain("context.paused = false");
+    expect(SCHOOL_SANDBOX_PLUGIN).not.toContain('context.subscribe("interval.tick"');
     expect(fs.syncCalls).toEqual([false]);
 
     await installSchoolSandboxPlugin(module);
     expect(fs.syncCalls).toEqual([false]);
   });
 
-  it("replaces the legacy Magic Mountain scenario with a versioned browser-ready park", async () => {
+  it("installs the direct Magic Mountain save and removes freeze-prone scenario entries", async () => {
     const module = createMemoryModule();
     const fs = module.FS as MemoryFs;
     fs.mkdir("/RCT/Scenarios");
     fs.writeFile("/RCT/Scenarios/Six Flags Magic Mountain.SC6", new Uint8Array([1, 2, 3]));
+    fs.writeFile("/RCT/Scenarios/Six Flags Magic Mountain.park", new Uint8Array([4, 5, 6]));
     const parkBytes = new Uint8Array([80, 65, 82, 75, ...new Array(20).fill(0)]);
 
     await installSchoolScenarioPatch(module, parkBytes, "test-patch-v1");
 
     expect(fs.analyzePath("/RCT/Scenarios/Six Flags Magic Mountain.SC6").exists).toBe(false);
-    expect(fs.readFile("/RCT/Scenarios/Six Flags Magic Mountain.park")).toEqual(parkBytes);
+    expect(fs.analyzePath("/RCT/Scenarios/Six Flags Magic Mountain.park").exists).toBe(false);
     expect(fs.readFile("/persistent/save/Six Flags Magic Mountain Browser Sandbox.park")).toEqual(parkBytes);
     expect(hasSchoolScenarioPatch(module, "test-patch-v1")).toBe(true);
     expect(hasSchoolScenarioPatch(module, "test-patch-v2")).toBe(false);
