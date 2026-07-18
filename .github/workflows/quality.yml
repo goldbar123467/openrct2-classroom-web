@@ -5,13 +5,17 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -25,8 +29,42 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Reject proprietary RCT2 assets
-        run: npm run verify:assets
+      - name: Unit, build, provenance, and security gates
+        run: npm run check:ci
 
-      - name: Unit tests and production build
-        run: npm run check
+      - name: Install pinned Chromium runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser accessibility, persistence, recovery, and offline flow
+        run: npm run test:e2e
+
+      - name: Generate release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence
+          npm sbom --sbom-format cyclonedx > release-evidence/sbom.cdx.json
+          node scripts/check-dependency-licenses.mjs --json > release-evidence/dependency-licenses.json
+          node scripts/hash-dist.mjs > release-evidence/dist-sha256.json
+          cp scripts/engine-manifest.json release-evidence/engine-manifest.json
+          git rev-parse HEAD > release-evidence/git-commit.txt
+          git diff --exit-code -- package-lock.json
+
+      - name: Upload commit-addressed release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parkworks-release-evidence-${{ github.sha }}
+          path: release-evidence/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parkworks-browser-failure-${{ github.sha }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 30
