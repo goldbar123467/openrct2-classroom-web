@@ -36,6 +36,7 @@ const configuredSchoolAssetUrl = import.meta.env.VITE_SCHOOL_ASSET_URL?.trim() ?
 const configuredSchoolAssetVersion = import.meta.env.VITE_SCHOOL_ASSET_VERSION?.trim() ?? "";
 const configuredSchoolScenarioPatchUrl = import.meta.env.VITE_SCHOOL_SCENARIO_PATCH_URL?.trim() ?? "";
 const configuredSchoolScenarioPatchVersion = import.meta.env.VITE_SCHOOL_SCENARIO_PATCH_VERSION?.trim() ?? "";
+const openMagicMountain = new URLSearchParams(window.location.search).get("park") === "magic-mountain";
 
 function resolveSchoolAssetUrl(value: string): URL | null {
   if (!value) return null;
@@ -522,7 +523,7 @@ playButton.addEventListener("click", async () => {
     await installScenarioPatchIfNeeded(module);
     openGameView();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    await startGame(module);
+    await startGame(module, openMagicMountain);
   } catch (error) {
     gameShell.hidden = true;
     launcherShell.hidden = false;

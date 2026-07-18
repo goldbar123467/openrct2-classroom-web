@@ -57,7 +57,7 @@ describe("production security configuration", () => {
     const source = readFileSync("src/openrct2.ts", "utf8");
     expect(source).toContain('"--openrct2-data-path=/OpenRCT2/"');
     expect(source).toContain('"--rct2-data-path=/RCT/"');
-    expect(source).toContain("module.callMain([...GAME_STARTUP_ARGUMENTS])");
+    expect(source).toContain("...(openMagicMountain ? [SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH] : [])");
     expect(source).not.toContain("chooseStartupScenario");
     expect(source).toContain('"/RCT/Scenarios/Six Flags Magic Mountain.park"');
     expect(source).not.toContain('GAME_STARTUP_ARGUMENTS, "/RCT/Scenarios');

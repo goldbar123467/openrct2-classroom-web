@@ -612,7 +612,7 @@ export async function clearRctData(module: OpenRct2Module): Promise<void> {
   localStorage.removeItem("parkworks.rctImport");
 }
 
-export async function startGame(module: OpenRct2Module): Promise<void> {
+export async function startGame(module: OpenRct2Module, openMagicMountain = false): Promise<void> {
   if (gameStarted) return;
   if (!hasRctData(module)) throw new Error("Add your licensed RCT2 files before opening the park.");
   module.canvas.hidden = false;
@@ -631,7 +631,10 @@ export async function startGame(module: OpenRct2Module): Promise<void> {
   await prepareBrowserStartupConfig(module, viewport);
   await installSchoolSandboxPlugin(module);
   try {
-    module.callMain([...GAME_STARTUP_ARGUMENTS]);
+    module.callMain([
+      ...GAME_STARTUP_ARGUMENTS,
+      ...(openMagicMountain ? [SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH] : []),
+    ]);
   } catch (error) {
     // emscripten_set_main_loop(..., simulateInfiniteLoop = 1) deliberately
     // unwinds callMain after registering the browser's animation loop.
