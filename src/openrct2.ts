@@ -11,9 +11,16 @@ import {
 } from "./engine-utils";
 
 const ENGINE_BASE = "/engine";
-const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-classroom2`;
+const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-school3`;
 const ENGINE_ASSET_LIMIT = 250_000_000;
 const ENGINE_ASSET_ENTRY_LIMIT = 5_000;
+
+function engineAssetUrl(fileName: string): string {
+  // Use the credential-free origin even when a test navigates with Basic Auth
+  // userinfo embedded in the document URL. Browsers reject credential-bearing
+  // Request URLs before the Authorization header can be reused.
+  return new URL(`${ENGINE_BASE}/${fileName}${ENGINE_QUERY}`, window.location.origin).href;
+}
 
 export type ProgressPhase = "checking" | "engine" | "open-assets" | "game-assets" | "storage" | "ready";
 
@@ -115,7 +122,7 @@ async function loadEngineScript(): Promise<void> {
   if (window.OPENRCT2_WEB) return;
   await new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `${ENGINE_BASE}/openrct2.js${ENGINE_QUERY}`;
+    script.src = engineAssetUrl("openrct2.js");
     script.async = true;
     script.addEventListener("load", () => resolve(), { once: true });
     script.addEventListener("error", () => reject(new Error("The OpenRCT2 engine could not be downloaded.")), { once: true });
@@ -228,14 +235,15 @@ async function fetchBytes(url: string, reporter: ProgressReporter, phase: Progre
 async function installOpenAssets(module: OpenRct2Module, reporter: ProgressReporter): Promise<void> {
   const fs = module.FS;
   const markerPath = "/OpenRCT2/version";
+  const layoutVersion = `${ENGINE_VERSION}:browser-root-v2`;
   if (pathExists(fs, markerPath)) {
     const existing = fs.readFile(markerPath, { encoding: "utf8" });
-    if (existing === ENGINE_VERSION) return;
+    if (existing === layoutVersion) return;
   }
 
   reporter({ phase: "open-assets", message: "Preparing OpenRCT2’s open-source park objects…" });
   const archiveBytes = await fetchBytes(
-    `${ENGINE_BASE}/assets.zip${ENGINE_QUERY}`,
+    engineAssetUrl("assets.zip"),
     reporter,
     "open-assets",
     "open-source park objects",
@@ -249,8 +257,10 @@ async function installOpenAssets(module: OpenRct2Module, reporter: ProgressRepor
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
     if (!entry) continue;
-    const relative = safeRelativeZipPath(entry.name, "");
-    if (!relative) throw new Error("The engine asset pack contains an unsafe path.");
+    const archiveRelative = safeRelativeZipPath(entry.name, "");
+    if (!archiveRelative) throw new Error("The engine asset pack contains an unsafe path.");
+    const relative = archiveRelative.startsWith("data/") ? archiveRelative.slice("data/".length) : archiveRelative;
+    if (!relative) continue;
     const data = await entry.async("uint8array");
     installedBytes += data.byteLength;
     if (installedBytes > ENGINE_ASSET_LIMIT) throw new Error("The engine asset pack expands beyond its safety limit.");
@@ -267,7 +277,7 @@ async function installOpenAssets(module: OpenRct2Module, reporter: ProgressRepor
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   }
-  fs.writeFile(markerPath, ENGINE_VERSION);
+  fs.writeFile(markerPath, layoutVersion);
   await syncFileSystem(module);
 }
 
@@ -307,7 +317,7 @@ export async function initializeOpenRct2(
     const factory = window.OPENRCT2_WEB;
     if (!factory) throw new Error("The OpenRCT2 browser factory is unavailable.");
 
-    const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas");
+    const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
     if (!canvas) throw new Error("The game canvas is missing.");
     reporter({ phase: "engine", message: `Starting ${ENGINE_VERSION} in ${profile.label.toLowerCase()} mode…` });
 
@@ -316,9 +326,8 @@ export async function initializeOpenRct2(
       canvas,
       INITIAL_MEMORY: profile.memoryMiB * 1024 * 1024,
       PTHREAD_POOL_SIZE: profile.workers,
-      mainScriptUrlOrBlob: `${ENGINE_BASE}/openrct2.js${ENGINE_QUERY}`,
-      locateFile: (fileName) =>
-        fileName === "openrct2.wasm" ? `${ENGINE_BASE}/openrct2.wasm${ENGINE_QUERY}` : `${ENGINE_BASE}/${fileName}${ENGINE_QUERY}`,
+      mainScriptUrlOrBlob: engineAssetUrl("openrct2.js"),
+      locateFile: (fileName) => engineAssetUrl(fileName),
       print: (message) => console.info(`[OpenRCT2] ${message}`),
       printErr: (message) => console.error(`[OpenRCT2] ${message}`),
     });
@@ -442,6 +451,55 @@ export function hasRctData(module: OpenRct2Module): boolean {
   return pathExists(module.FS, "/RCT/Data/ch.dat");
 }
 
+function upsertGeneralSetting(config: string, key: string, value: string): string {
+  const newline = config.includes("\r\n") ? "\r\n" : "\n";
+  const lines = config ? config.split(/\r?\n/) : [];
+  const generalStart = lines.findIndex((line) => /^\s*\[general\]\s*$/i.test(line));
+  if (generalStart === -1) {
+    if (lines.length && lines.at(-1) !== "") lines.push("");
+    lines.push("[general]", `${key} = ${value}`);
+    return `${lines.join(newline)}${newline}`;
+  }
+
+  const nextSectionOffset = lines.slice(generalStart + 1).findIndex((line) => /^\s*\[[^\]]+\]\s*$/.test(line));
+  const generalEnd = nextSectionOffset === -1 ? lines.length : generalStart + 1 + nextSectionOffset;
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const settingPattern = new RegExp(`^\\s*${escapedKey}\\s*=`, "i");
+  const settingIndex = lines.slice(generalStart + 1, generalEnd).findIndex((line) => settingPattern.test(line));
+  if (settingIndex === -1) lines.splice(generalStart + 1, 0, `${key} = ${value}`);
+  else lines[generalStart + 1 + settingIndex] = `${key} = ${value}`;
+  return lines.join(newline);
+}
+
+async function prepareBrowserStartupConfig(
+  module: OpenRct2Module,
+  viewport: { width: number; height: number },
+): Promise<void> {
+  const configPath = "/persistent/config.ini";
+  const existing = pathExists(module.FS, configPath)
+    ? module.FS.readFile(configPath, { encoding: "utf8" })
+    : "";
+  const source = typeof existing === "string" ? existing : new TextDecoder().decode(existing);
+  let configured = upsertGeneralSetting(source, "infer_display_dpi", "false");
+  configured = upsertGeneralSetting(configured, "window_scale", "1.000000");
+  configured = upsertGeneralSetting(configured, "window_width", String(viewport.width));
+  configured = upsertGeneralSetting(configured, "window_height", String(viewport.height));
+  if (configured !== source) {
+    module.FS.writeFile(configPath, configured);
+    await syncFileSystem(module);
+  }
+}
+
+function chooseStartupScenario(module: OpenRct2Module): string | null {
+  const scenarioDirectory = "/RCT/Scenarios";
+  if (!pathExists(module.FS, scenarioDirectory)) return null;
+  const names = module.FS.readdir(scenarioDirectory).filter((name) => name.toLowerCase().endsWith(".sc6"));
+  const preferred = ["Crazy Castle.SC6", "Factory Capers.SC6"];
+  const selected = preferred.find((name) => names.some((candidate) => candidate.toLowerCase() === name.toLowerCase()))
+    ?? names.sort((left, right) => left.localeCompare(right, "en")).at(0);
+  return selected ? `${scenarioDirectory}/${selected}` : null;
+}
+
 export async function clearRctData(module: OpenRct2Module): Promise<void> {
   clearTree(module.FS, "/RCT");
   await syncFileSystem(module);
@@ -451,10 +509,38 @@ export async function clearRctData(module: OpenRct2Module): Promise<void> {
 export async function startGame(module: OpenRct2Module): Promise<void> {
   if (gameStarted) return;
   if (!hasRctData(module)) throw new Error("Add your licensed RCT2 files before opening the park.");
-  gameStarted = true;
   module.canvas.hidden = false;
   module.canvas.focus();
-  module.callMain(["--user-data-path=/persistent/", "--openrct2-data-path=/OpenRCT2/"]);
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const rect = module.canvas.getBoundingClientRect();
+  const viewport = {
+    width: Math.max(640, Math.round(rect.width || window.innerWidth)),
+    height: Math.max(480, Math.round(rect.height || window.innerHeight)),
+  };
+  // Match SDL's drawing buffer to the CSS viewport before OpenRCT2 installs its
+  // input handlers. A stretched 1280x720 buffer makes pointer coordinates drift.
+  module.canvas.width = viewport.width;
+  module.canvas.height = viewport.height;
+  // OpenRCT2's desktop DPI inference divides by an SDL window width that is zero during browser startup.
+  await prepareBrowserStartupConfig(module, viewport);
+  try {
+    const startupScenario = chooseStartupScenario(module);
+    module.callMain([
+      ...(startupScenario ? [startupScenario] : []),
+      "--user-data-path=/persistent/",
+      "--openrct2-data-path=/OpenRCT2/",
+      "--rct2-data-path=/RCT/",
+    ]);
+  } catch (error) {
+    // emscripten_set_main_loop(..., simulateInfiniteLoop = 1) deliberately
+    // unwinds callMain after registering the browser's animation loop.
+    const message = error instanceof Error ? error.message : String(error);
+    if (message !== "unwind") {
+      module.canvas.hidden = true;
+      throw error;
+    }
+  }
+  gameStarted = true;
 }
 
 export function setGamePaused(module: OpenRct2Module, paused: boolean): void {

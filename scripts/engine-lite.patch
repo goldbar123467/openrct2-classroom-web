@@ -1,6 +1,120 @@
 diff --git a/scripts/build-emscripten b/scripts/build-emscripten
+index 2780a9af0..e47599f65 100755
 --- a/scripts/build-emscripten
 +++ b/scripts/build-emscripten
-@@ -31 +31 @@
+@@ -28,7 +28,7 @@ emcmake cmake ../ \
+ 	-DZSTD_LIBRARIES="$ZSTD_ROOT/build/build/lib/libzstd.a" \
+ 	-DEMSCRIPTEN_FLAGS="-s USE_SDL=2 -s USE_ZLIB=1 -s USE_BZIP2=1 -s USE_LIBPNG=1 -pthread -O3" \
+ 	-DEMSCRIPTEN_EXPORTED_FUNCTIONS="_GetVersion,_main" \
 -	-DEMSCRIPTEN_LDFLAGS="-Wno-pthreads-mem-growth -s SAFE_HEAP=0 -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=4GB -s INITIAL_MEMORY=2GB -s STACK_SIZE=8388608 -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s PTHREAD_POOL_SIZE=120 -pthread -s EXPORTED_RUNTIME_METHODS=ccall,FS,callMain,UTF8ToString,stringToNewUTF8 -lidbfs.js --use-preload-plugins -s MODULARIZE=1 -s 'EXPORT_NAME=\"OPENRCT2_WEB\"' -Wl,--export-if-defined=LoadGameCallback"
 +	-DEMSCRIPTEN_LDFLAGS="-Wno-pthreads-mem-growth -s SAFE_HEAP=0 -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=2GB -s INITIAL_MEMORY=512MB -s STACK_SIZE=8388608 -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 -s PTHREAD_POOL_SIZE=4 -pthread -s EXPORTED_RUNTIME_METHODS=ccall,FS,callMain,UTF8ToString,stringToNewUTF8 -lidbfs.js --use-preload-plugins -s MODULARIZE=1 -s 'EXPORT_NAME=\"OPENRCT2_WEB\"' -Wl,--export-if-defined=LoadGameCallback"
+ 
+ emmake ninja
+ 
+diff --git a/src/openrct2-ui/UiContext.cpp b/src/openrct2-ui/UiContext.cpp
+index e482c7124..f842be497 100644
+--- a/src/openrct2-ui/UiContext.cpp
++++ b/src/openrct2-ui/UiContext.cpp
+@@ -238,8 +238,15 @@ public:
+ 
+     bool IsMinimised() override
+     {
++#ifdef __EMSCRIPTEN__
++        // The setup wrapper intentionally hides the canvas while importing the
++        // licensed files. SDL's browser window flag does not recover when the
++        // DOM canvas is revealed, so it must not suppress every future frame.
++        return false;
++#else
+         uint32_t windowFlags = GetWindowFlags();
+         return (windowFlags & SDL_WINDOW_MINIMIZED) || (windowFlags & SDL_WINDOW_HIDDEN);
++#endif
+     }
+ 
+     bool IsSteamOverlayActive() override
+@@ -842,6 +849,25 @@ private:
+ 
+     void OnResize(int32_t width, int32_t height)
+     {
++#ifdef __EMSCRIPTEN__
++        // SDL can report a transient 0x0 resize while the setup wrapper swaps
++        // from its form to the canvas. Recover from the real browser target.
++        if (width <= 0)
++        {
++            width = MAIN_THREAD_EM_ASM_INT({ return (Module.canvas && Module.canvas.width) || window.innerWidth || 1280; });
++        }
++        if (height <= 0)
++        {
++            height = MAIN_THREAD_EM_ASM_INT({ return (Module.canvas && Module.canvas.height) || window.innerHeight || 720; });
++        }
++        int32_t sdlWidth = 0;
++        int32_t sdlHeight = 0;
++        SDL_GetWindowSize(_window, &sdlWidth, &sdlHeight);
++        if (sdlWidth <= 0 || sdlHeight <= 0)
++        {
++            SDL_SetWindowSize(_window, width, height);
++        }
++#endif
+         // Scale the native window size to the game's canvas size
+         _width = static_cast<int32_t>(width / Config::Get().general.windowScale);
+         _height = static_cast<int32_t>(height / Config::Get().general.windowScale);
+diff --git a/src/openrct2-ui/drawing/engines/HardwareDisplayDrawingEngine.cpp b/src/openrct2-ui/drawing/engines/HardwareDisplayDrawingEngine.cpp
+index c032c4a93..ca45b192d 100644
+--- a/src/openrct2-ui/drawing/engines/HardwareDisplayDrawingEngine.cpp
++++ b/src/openrct2-ui/drawing/engines/HardwareDisplayDrawingEngine.cpp
+@@ -117,12 +117,27 @@ public:
+         for (uint32_t i = 0; i < rendererInfo.num_texture_formats; i++)
+         {
+             uint32_t format = rendererInfo.texture_formats[i];
++#ifdef __EMSCRIPTEN__
++            // The texture uploader supports 1-, 2-, and 4-byte formats, while
++            // Emscripten may advertise a smaller 3-byte RGB format first.
++            if (!SDL_ISPIXELFORMAT_FOURCC(format) && !SDL_ISPIXELFORMAT_INDEXED(format)
++                && SDL_BYTESPERPIXEL(format) == 4)
++            {
++                pixelFormat = format;
++                break;
++            }
++#else
+             if (!SDL_ISPIXELFORMAT_FOURCC(format) && !SDL_ISPIXELFORMAT_INDEXED(format)
+                 && (pixelFormat == SDL_PIXELFORMAT_UNKNOWN || SDL_BYTESPERPIXEL(format) < SDL_BYTESPERPIXEL(pixelFormat)))
+             {
+                 pixelFormat = format;
+             }
++#endif
+         }
++#ifdef __EMSCRIPTEN__
++        if (pixelFormat == SDL_PIXELFORMAT_UNKNOWN)
++            pixelFormat = SDL_PIXELFORMAT_ABGR8888;
++#endif
+ 
+         ScaleQuality scaleQuality = GetContext()->GetUiContext().GetScaleQuality();
+         if (scaleQuality == ScaleQuality::smoothNearestNeighbour)
+@@ -174,6 +189,11 @@ public:
+         SDL_QueryTexture(_screenTexture, &format, nullptr, nullptr, nullptr);
+         _screenTextureFormat = SDL_AllocFormat(format);
+ 
++#ifdef __EMSCRIPTEN__
++        // The renderer can be created while the setup canvas is 0x0. Reset its
++        // viewport after the browser-size recovery so RenderCopy has a target.
++        SDL_RenderSetViewport(_sdlRenderer, nullptr);
++#endif
+         X8DrawingEngine::Resize(width, height);
+     }
+ 
+diff --git a/src/openrct2/Context.cpp b/src/openrct2/Context.cpp
+index 44914b80d..9152c79be 100644
+--- a/src/openrct2/Context.cpp
++++ b/src/openrct2/Context.cpp
+@@ -562,10 +562,11 @@ namespace OpenRCT2
+             OpenProgress(STR_CHECKING_SCENARIO_FILES);
+             _scenarioRepository->Scan(currentLanguage);
+ 
++#ifndef __EMSCRIPTEN__
+             OpenProgress(STR_CHECKING_TITLE_SEQUENCES);
+             TitleSequenceManager::Scan();
+-
+             OpenProgress(STR_LOADING_GENERIC);
++#endif
+         }
+ 
+     public:

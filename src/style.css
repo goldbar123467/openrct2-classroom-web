@@ -367,6 +367,49 @@ h1 em {
   grid-template-columns: 1fr 1.1fr;
 }
 
+.primary-actions.has-school-download {
+  max-width: 44rem;
+  grid-template-columns: 1fr 1.1fr;
+}
+
+.school-delivery-note {
+  display: flex;
+  min-height: 68px;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.8rem 1.15rem;
+  border: 3px solid var(--ink);
+  border-radius: 3px;
+  background: #b9d8ce;
+  color: var(--ink);
+  box-shadow: 5px 5px 0 var(--ink);
+}
+
+.school-delivery-note[hidden] { display: none; }
+
+.school-delivery-note > span:first-child {
+  display: grid;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-weight: 900;
+}
+
+.school-delivery-note b,
+.school-delivery-note small { display: block; }
+
+.school-delivery-note b { font-size: 0.77rem; }
+
+.school-delivery-note small {
+  margin-top: 0.25rem;
+  color: var(--ink-soft);
+  font-size: 0.63rem;
+  line-height: 1.25;
+}
+
 .ticket-button {
   position: relative;
   display: flex;
@@ -381,6 +424,14 @@ h1 em {
   text-align: left;
   box-shadow: 5px 5px 0 var(--ink);
   transition: translate 140ms ease, box-shadow 140ms ease;
+}
+
+a.ticket-button {
+  text-decoration: none;
+}
+
+.ticket-button[hidden] {
+  display: none;
 }
 
 .ticket-button::before,
@@ -422,6 +473,18 @@ h1 em {
 .ticket-button small { margin-top: 0.2rem; font-size: 0.68rem; opacity: 0.8; }
 .ticket-button-primary { background: var(--gold); }
 .ticket-button-secondary { background: var(--paper-bright); }
+.ticket-button-download { background: #b9d8ce; }
+
+.browser-check-copy {
+  margin: 0.35rem 0 0.85rem;
+  font-family: "Courier New", monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+#system-title.has-error + .browser-check-copy {
+  color: #8a1f10;
+}
 
 .progress-depot {
   max-width: 44rem;
@@ -784,61 +847,14 @@ kbd {
   background: #050705;
 }
 
-#game-canvas {
+#canvas {
   display: block;
-  width: 100vw;
-  height: 100vh;
+  width: max(100vw, 640px);
+  height: max(100vh, 480px);
   outline: none;
   image-rendering: pixelated;
-}
-
-.game-dock-button {
-  position: fixed;
-  z-index: 820;
-  right: max(0.75rem, env(safe-area-inset-right));
-  bottom: max(0.75rem, env(safe-area-inset-bottom));
-  display: grid;
-  min-width: 3.5rem;
-  min-height: 3.5rem;
-  place-items: center;
-  border: 3px solid var(--paper-bright);
-  border-radius: 50%;
-  background: var(--board);
-  color: var(--white);
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 45%);
-}
-
-.game-dock-button span { font-family: Georgia, serif; font-weight: 900; }
-.game-dock-button small { font-size: 0.52rem; }
-
-.game-controls {
-  position: fixed;
-  z-index: 1000;
-  right: 1rem;
-  top: 5rem;
-  display: grid;
-  gap: 0.4rem;
-}
-
-.game-controls button {
-  padding: 0.65rem 0.85rem;
-  border: 2px solid var(--ink);
-  background: var(--gold);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 0.72rem;
-  font-weight: 900;
-}
-
-.site-shell.is-overlay {
-  position: fixed;
-  z-index: 950;
-  inset: 0;
-  width: min(100%, 1440px);
-  height: 100vh;
-  overflow-y: auto;
-  box-shadow: 0 0 0 100vw rgb(0 0 0 / 65%);
+  touch-action: none;
+  user-select: none;
 }
 
 .paper-dialog {
@@ -958,6 +974,7 @@ kbd {
 
   .topbar-actions .network-indicator { display: none; }
   .site-footer { flex-direction: column; align-items: flex-start; }
+  .primary-actions.has-school-download { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 560px) {

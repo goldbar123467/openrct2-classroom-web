@@ -34,4 +34,13 @@ describe("offline shell", () => {
     expect(source).toContain('cache.put("/", rootResponse.clone())');
     expect(source).toContain("ignoreVary: true");
   });
+
+  it("never intercepts or caches licensed archives", () => {
+    const source = readFileSync(resolve("public/sw.js"), "utf8");
+    const licensedGuard = source.indexOf('url.pathname.startsWith("/licensed/")');
+    const fetchHandler = source.indexOf('self.addEventListener("fetch"');
+    const cacheOpen = source.indexOf("caches.open(CACHE_VERSION)", fetchHandler);
+    expect(licensedGuard).toBeGreaterThan(fetchHandler);
+    expect(licensedGuard).toBeLessThan(cacheOpen);
+  });
 });

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "parkworks-v7-9de2d43fb6-release";
+const CACHE_VERSION = "parkworks-v11-9de2d43fb6-native-input";
 const SHELL_URLS = ["/manifest.webmanifest", "/parkworks-icon.png"];
 
 async function installShell() {
@@ -31,6 +31,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+
+  // Licensed archives always go to the authenticated network origin and never enter Cache Storage.
+  if (url.pathname.startsWith("/licensed/")) return;
 
   if (url.pathname.startsWith("/engine/")) {
     event.respondWith(

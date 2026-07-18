@@ -11,7 +11,9 @@ release-evidence/
 .upstream-portable-extracted/
 .engine-staging/
 .engine-rebuild/
+.secrets/
 *.log
 .env
 .env.*
 !.env.example
+.vercel/

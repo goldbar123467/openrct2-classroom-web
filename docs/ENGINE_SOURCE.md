@@ -28,6 +28,8 @@ Math.min(4, Math.max(1, Number(Module["PTHREAD_POOL_SIZE"]) || 2))
 
 The wrapper chooses 2 workers for Classroom lite, 3 for Balanced, and 4 for Smooth. The build disables network, HTTP, OpenGL, TTF, FLAC, and Discord RPC, matching the upstream browser build’s privacy-oriented feature set.
 
+The source patch also keeps native builds on the upstream background preloader while browser builds initialize repositories synchronously and switch to the requested startup scene before the Emscripten main loop begins. This avoids an indefinitely rendering-inhibited preloader after its worker finishes in Chrome.
+
 ## Rebuild
 
 The automated rebuild uses the immutable container image:
@@ -61,10 +63,10 @@ Emscripten-generated JS/WASM is a coupled pair and can vary byte-for-byte betwee
 
 `scripts/sync-engine.ps1` now calls the clean source rebuild before retrieving and assembling matching open assets. It no longer substitutes an upstream 2 GiB/120-worker WASM and patches only JavaScript.
 
-On 2026-07-18, a clean local run compiled 693 targets and matched the tracked release:
+On 2026-07-18, a clean local run compiled 693 targets with the browser preloader, resize, and hardware-display fixes:
 
-- `openrct2.js`: `4241cc8f2fe41adf049824a7e58959bb9a3c1305af2479f7861d8673ab9948d4`
-- `openrct2.wasm`: `bde90a0e5ba3041c6235e64d038d5dd808995401f383e6d79890b9cfcd9c3467`
+- `openrct2.js`: `8ebc20e0b5d4a4c77796844f188929c501bb85127d2a623b4a663e03433c8296`
+- `openrct2.wasm`: `588d9993675caa8c1e28f1ca716dc82621accbed15e01042dff8bfbca3ebadb5`
 - WASM memory import: shared, 8192 initial pages (512 MiB), 32768 maximum pages (2 GiB)
 
 The authoritative byte sizes and SHA-256 hashes are machine-readable in `scripts/engine-manifest.json` and are checked during every production build.

@@ -1,0 +1,31 @@
+services:
+  classroom-web:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    read_only: true
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SCHOOL_BASIC_AUTH_USER: ${SCHOOL_BASIC_AUTH_USER:?Set SCHOOL_BASIC_AUTH_USER in deploy/.env}
+      SCHOOL_BASIC_AUTH_HASH: ${SCHOOL_BASIC_AUTH_HASH:?Set SCHOOL_BASIC_AUTH_HASH in deploy/.env}
+    volumes:
+      - type: bind
+        source: ./Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+      - type: bind
+        source: ../dist
+        target: /srv
+        read_only: true
+      - type: bind
+        source: ${SCHOOL_ASSET_DIR:?Set SCHOOL_ASSET_DIR in deploy/.env}
+        target: /licensed
+        read_only: true
+    tmpfs:
+      - /tmp
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

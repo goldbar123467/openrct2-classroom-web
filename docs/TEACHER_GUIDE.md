@@ -4,7 +4,7 @@
 
 Before giving students any RCT2 data, get written confirmation from district administration or counsel that the school’s license permits the intended number of student/device installations. OpenRCT2’s GPL license does not make the original RCT2 graphics, sound, scenarios, or object data free to distribute.
 
-Do not place proprietary game files in GitHub, Vercel, a public Drive link, a CI artifact, or this repository. The safest Parkworks flow is a local student import from a district-approved source with access controls and documented rights.
+Do not place game files in GitHub, Vercel, a public Drive link, a CI artifact, or this repository. The school deployment mounts its human-authorized package separately and delivers it only through the password-protected, no-store classroom route described in `deploy/README.md`.
 
 ## Pilot before class
 
@@ -33,4 +33,4 @@ IndexedDB is durable browser storage, not an institutional backup. A Powerwash, 
 
 ## Incident response
 
-If a new deployment breaks gameplay, stop class rollout, use the previous verified Vercel deployment, and preserve the affected student backup ZIPs. Do not ask students to repeatedly re-import or erase data until the incident owner has reproduced the problem.
+If a new deployment breaks gameplay, stop class rollout, restore the previous verified server bundle or static Vercel rollback, and preserve the affected student backup ZIPs. Do not ask students to repeatedly reinstall or erase data until the incident owner has reproduced the problem.

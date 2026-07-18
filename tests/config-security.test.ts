@@ -37,7 +37,49 @@ describe("production security configuration", () => {
             { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
           ]),
         }),
+        expect.objectContaining({
+          source: "/licensed/(.*)",
+          headers: expect.arrayContaining([{ key: "Cache-Control", value: "private, no-store" }]),
+        }),
       ]),
     );
+  });
+
+  it("keeps passwords and private asset coordinates out of client configuration", () => {
+    const source = readFileSync("src/main.ts", "utf8");
+    expect(source).toContain("VITE_SCHOOL_ASSET_URL");
+    expect(source).toContain("VITE_SCHOOL_ASSET_VERSION");
+    expect(source).not.toMatch(/VITE_.*(?:PASSWORD|SECRET|TOKEN|HASH|PRIVATE_PATH)/);
+    expect(source).not.toContain("IMSAWEST");
+  });
+
+  it("starts OpenRCT2 with the imported licensed-data directory", () => {
+    const source = readFileSync("src/openrct2.ts", "utf8");
+    expect(source).toContain('"--openrct2-data-path=/OpenRCT2/"');
+    expect(source).toContain('"--rct2-data-path=/RCT/"');
+  });
+
+  it("builds engine requests from the credential-free browser origin", () => {
+    const source = readFileSync("src/openrct2.ts", "utf8");
+    expect(source).toContain("window.location.origin");
+    expect(source).toContain('script.src = engineAssetUrl("openrct2.js")');
+    expect(source).toContain('mainScriptUrlOrBlob: engineAssetUrl("openrct2.js")');
+    expect(source).toContain("locateFile: (fileName) => engineAssetUrl(fileName)");
+  });
+
+  it("matches the OpenRCT2 drawing buffer to the browser viewport before startup", () => {
+    const source = readFileSync("src/openrct2.ts", "utf8");
+    const launcher = readFileSync("src/main.ts", "utf8");
+    const styles = readFileSync("src/style.css", "utf8");
+    expect(source).toContain("module.canvas.getBoundingClientRect()");
+    expect(source).toContain('upsertGeneralSetting(configured, "window_width", String(viewport.width))');
+    expect(source).toContain('upsertGeneralSetting(configured, "window_height", String(viewport.height))');
+    expect(source).toContain("module.canvas.width = viewport.width");
+    expect(source).toContain("module.canvas.height = viewport.height");
+    expect(styles).toContain("width: max(100vw, 640px)");
+    expect(styles).toContain("height: max(100vh, 480px)");
+    expect(launcher).toContain('<canvas id="canvas"');
+    expect(source).toContain('querySelector<HTMLCanvasElement>("#canvas")');
+    expect(launcher).not.toContain('id="game-canvas"');
   });
 });
