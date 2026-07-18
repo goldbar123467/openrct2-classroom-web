@@ -26,13 +26,33 @@ function Invoke-Checked([string]$Label, [scriptblock]$Command) {
     if ($LASTEXITCODE -ne 0) { throw "$Label failed with exit code $LASTEXITCODE." }
 }
 
+function Remove-BuildDirectory([string]$Path, [string]$Label) {
+    $ResolvedPath = [System.IO.Path]::GetFullPath($Path)
+    Assert-ProjectPath $ResolvedPath $Label
+    if (-not (Test-Path -LiteralPath $ResolvedPath)) { return }
+
+    try {
+        Remove-Item -LiteralPath $ResolvedPath -Recurse -Force -ErrorAction Stop
+        return
+    }
+    catch {
+        Write-Warning "$Label contains container-owned files; retrying cleanup through the pinned build image."
+    }
+
+    # Linux runners receive root-owned outputs from the pinned container. The
+    # exact bind mount is already constrained to the project by the assertion.
+    Invoke-Checked "$Label container cleanup" {
+        docker run --rm --volume "${ResolvedPath}:/src" $Image bash -lc "find /src -depth -mindepth 1 -delete"
+    }
+    Remove-Item -LiteralPath $ResolvedPath -Force -ErrorAction Stop
+}
+
 Assert-ProjectPath $Staging "Engine staging directory"
 Assert-ProjectPath $Output "Engine output directory"
 if ($VerifyManifest -and $VerifyContract) { throw "Choose either -VerifyManifest or -VerifyContract, not both." }
 
-if (Test-Path -LiteralPath $Staging) {
-    Remove-Item -LiteralPath $Staging -Recurse -Force
-}
+Remove-BuildDirectory $Source "Engine source directory"
+if (Test-Path -LiteralPath $Staging) { Remove-Item -LiteralPath $Staging -Recurse -Force }
 New-Item -ItemType Directory -Path $Source | Out-Null
 
 Invoke-Checked "Git initialization" { git -C $Source init --quiet }
@@ -90,9 +110,7 @@ if ($VerifyContract) {
 }
 
 if (-not $KeepSource) {
-    $ResolvedSource = [System.IO.Path]::GetFullPath($Source)
-    Assert-ProjectPath $ResolvedSource "Engine source directory"
-    Remove-Item -LiteralPath $ResolvedSource -Recurse -Force
+    Remove-BuildDirectory $Source "Engine source directory"
 }
 
 Write-Output "Rebuilt OpenRCT2 $Commit with the pinned container. Output: $Output"
