@@ -107,6 +107,15 @@ export function formatBytes(bytes: number): string {
   return `${value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
 }
 
+export function isOfflineEngineReady(
+  scriptCached: boolean,
+  wasmCached: boolean,
+  archiveCached: boolean,
+  openAssetsInstalled: boolean,
+): boolean {
+  return scriptCached && wasmCached && (archiveCached || openAssetsInstalled);
+}
+
 export async function sha256(data: Uint8Array): Promise<string> {
   const view = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
   const digest = await crypto.subtle.digest("SHA-256", view);

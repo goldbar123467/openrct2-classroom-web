@@ -13,6 +13,7 @@ import {
   choosePerformanceProfile,
   formatBytes,
   getPerformanceProfile,
+  isOfflineEngineReady,
   listPerformanceProfiles,
   type PerformanceProfile,
   type PerformanceProfileId,
@@ -23,6 +24,7 @@ import {
   importRctArchive,
   initializeOpenRct2,
   isGameStarted,
+  pathExists,
   setGamePaused,
   startGame,
   type OpenRct2Module,
@@ -578,12 +580,20 @@ async function updateOfflineCacheStatus(): Promise<void> {
     offlineCopy.textContent = "Launcher ready after reload";
     return;
   }
-  const engineCached = await Promise.all([
+  const [scriptCached, wasmCached, archiveCached] = await Promise.all([
     caches.match("/engine/openrct2.js", { ignoreSearch: true }),
     caches.match("/engine/openrct2.wasm", { ignoreSearch: true }),
     caches.match("/engine/assets.zip", { ignoreSearch: true }),
   ]);
-  offlineCopy.textContent = engineCached.every(Boolean) ? "Launcher + engine ready" : "Launcher ready";
+  const openAssetsInstalled = moduleInstance ? pathExists(moduleInstance.FS, "/OpenRCT2/version") : false;
+  offlineCopy.textContent = isOfflineEngineReady(
+    Boolean(scriptCached),
+    Boolean(wasmCached),
+    Boolean(archiveCached),
+    openAssetsInstalled,
+  )
+    ? "Launcher + engine ready"
+    : "Launcher ready";
 }
 
 if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol === "https:") {

@@ -4,6 +4,7 @@ import {
   findRctRoot,
   formatBytes,
   isExpectedRctStructure,
+  isOfflineEngineReady,
   isSafeBackupPath,
   safeRelativeZipPath,
 } from "../src/engine-utils";
@@ -53,5 +54,14 @@ describe("formatBytes", () => {
     expect(formatBytes(0)).toBe("0 B");
     expect(formatBytes(1024)).toBe("1.0 KB");
     expect(formatBytes(10 * 1024 * 1024)).toBe("10 MB");
+  });
+});
+
+describe("offline engine readiness", () => {
+  it("requires executable files plus either the archive or installed open assets", () => {
+    expect(isOfflineEngineReady(true, true, true, false)).toBe(true);
+    expect(isOfflineEngineReady(true, true, false, true)).toBe(true);
+    expect(isOfflineEngineReady(true, true, false, false)).toBe(false);
+    expect(isOfflineEngineReady(false, true, true, true)).toBe(false);
   });
 });
