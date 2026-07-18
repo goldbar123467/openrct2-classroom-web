@@ -80,6 +80,8 @@ describe("licensed RCT2 archive transaction", () => {
 
     expect(fs.readFile("/persistent/plugin/parkworks-school-sandbox.js", { encoding: "utf8" }))
       .toBe(SCHOOL_SANDBOX_PLUGIN);
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain("schoolSandboxDelayTicks = 200");
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain("schoolSandboxStep += 1");
     expect(fs.syncCalls).toEqual([false]);
 
     await installSchoolSandboxPlugin(module);

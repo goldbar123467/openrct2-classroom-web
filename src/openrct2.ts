@@ -16,41 +16,63 @@ const ENGINE_ASSET_LIMIT = 250_000_000;
 const ENGINE_ASSET_ENTRY_LIMIT = 5_000;
 const SCHOOL_SANDBOX_PLUGIN_PATH = "/persistent/plugin/parkworks-school-sandbox.js";
 
-export const SCHOOL_SANDBOX_PLUGIN = String.raw`var shouldApplySchoolSandbox = false;
+export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxDelayTicks = -1;
+var schoolSandboxStep = 0;
+
+function scheduleSchoolSandbox() {
+    schoolSandboxDelayTicks = 200;
+    schoolSandboxStep = 0;
+}
 
 function applySchoolSandbox() {
-    if (!shouldApplySchoolSandbox || context.mode !== "normal") {
+    if (schoolSandboxDelayTicks < 0 || context.mode !== "normal") {
         return;
     }
 
-    shouldApplySchoolSandbox = false;
-    park.setFlag("noMoney", true);
-    park.setFlag("unlockAllPrices", true);
-    cheats.sandboxMode = true;
-    cheats.ignoreResearchStatus = true;
+    if (schoolSandboxDelayTicks > 0) {
+        schoolSandboxDelayTicks -= 1;
+        return;
+    }
 
-    park.research.funding = 0;
-    scenario.objective.type = "haveFun";
-    park.postMessage({
-        type: "blank",
-        text: "School Sandbox active: no money, sandbox tools, and all research unlocked."
-    });
+    if (schoolSandboxStep === 0) {
+        park.setFlag("noMoney", true);
+    } else if (schoolSandboxStep === 1) {
+        park.setFlag("unlockAllPrices", true);
+    } else if (schoolSandboxStep === 2) {
+        cheats.sandboxMode = true;
+    } else if (schoolSandboxStep === 3) {
+        cheats.ignoreResearchStatus = true;
+    } else if (schoolSandboxStep === 4) {
+        park.research.funding = 0;
+    } else if (schoolSandboxStep === 5) {
+        scenario.objective.type = "haveFun";
+    } else {
+        park.postMessage({
+            type: "blank",
+            text: "School Sandbox active: no money, sandbox tools, and all research unlocked."
+        });
+        schoolSandboxDelayTicks = -1;
+        return;
+    }
+
+    schoolSandboxStep += 1;
+    schoolSandboxDelayTicks = 8;
 }
 
 function main() {
     context.subscribe("map.changed", function () {
-        shouldApplySchoolSandbox = true;
+        scheduleSchoolSandbox();
     });
     context.subscribe("interval.tick", applySchoolSandbox);
 
     if (context.mode === "normal") {
-        shouldApplySchoolSandbox = true;
+        scheduleSchoolSandbox();
     }
 }
 
 registerPlugin({
     name: "Parkworks School Sandbox",
-    version: "1.0.0",
+    version: "1.0.1",
     authors: ["Parkworks"],
     type: "intransient",
     licence: "MIT",
