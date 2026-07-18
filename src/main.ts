@@ -140,7 +140,7 @@ app.innerHTML = `
         <section class="save-ledger" aria-labelledby="save-title">
           <div class="ledger-heading">
             <div><p class="mini-label">Local save ledger</p><h2 id="save-title">Parks stay on this device</h2></div>
-            <span class="save-light" id="save-light" aria-label="Save storage status"></span>
+            <span class="save-light" id="save-light" aria-hidden="true"></span>
           </div>
           <dl>
             <div><dt>RCT2 files</dt><dd id="asset-status">Not checked</dd></div>
@@ -596,7 +596,12 @@ async function updateOfflineCacheStatus(): Promise<void> {
     : "Launcher ready";
 }
 
-if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol === "https:") {
+const canRegisterServiceWorker =
+  import.meta.env.PROD &&
+  "serviceWorker" in navigator &&
+  (location.protocol === "https:" || location.hostname === "127.0.0.1" || location.hostname === "localhost");
+
+if (canRegisterServiceWorker) {
   window.addEventListener("load", () => {
     void navigator.serviceWorker
       .register("/sw.js", { scope: "/" })

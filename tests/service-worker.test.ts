@@ -25,4 +25,13 @@ describe("offline shell", () => {
     const source = readFileSync(resolve("public/sw.js"), "utf8");
     expect(source).toContain(manifest.icons[0]?.src);
   });
+
+  it("discovers and precaches the production HTML's hashed entrypoints", () => {
+    const source = readFileSync(resolve("public/sw.js"), "utf8");
+    expect(source).toContain("html.matchAll");
+    expect(source).toContain("entrypoints");
+    expect(source).toContain("cache.addAll([...SHELL_URLS, ...new Set(entrypoints)])");
+    expect(source).toContain('cache.put("/", rootResponse.clone())');
+    expect(source).toContain("ignoreVary: true");
+  });
 });

@@ -4,6 +4,7 @@ dist/
 playwright-report/
 test-results/
 coverage/
+release-evidence/
 .upstream-artifact/
 .upstream-graphics/
 .upstream-portable/

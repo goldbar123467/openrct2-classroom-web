@@ -23,13 +23,13 @@ const ROLLBACK = "/persistent/.restore-rollback";
 const JOURNAL = "/persistent/.restore-journal.json";
 const PROTECTED_NAMES = [".restore-staging", ".restore-rollback", ".restore-journal.json"];
 
-interface BackupFileRecord {
+export interface BackupFileRecord {
   path: string;
   size: number;
   sha256: string;
 }
 
-interface BackupManifest {
+export interface BackupManifest {
   format: typeof BACKUP_FORMAT;
   version: typeof BACKUP_VERSION;
   engineVersion: string;
@@ -82,7 +82,13 @@ export async function requestPersistentStorage(): Promise<boolean> {
   return (await navigator.storage?.persist?.()) ?? false;
 }
 
-export async function exportSaveBackup(module: OpenRct2Module): Promise<{ fileName: string; manifest: BackupManifest }> {
+export interface SaveBackupArtifact {
+  blob: Blob;
+  fileName: string;
+  manifest: BackupManifest;
+}
+
+export async function createSaveBackup(module: OpenRct2Module): Promise<SaveBackupArtifact> {
   await syncFileSystem(module);
   const zip = new JSZip();
   const files = walkFiles(module.FS, "/persistent")
@@ -109,8 +115,13 @@ export async function exportSaveBackup(module: OpenRct2Module): Promise<{ fileNa
   const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
   const day = new Date().toISOString().slice(0, 10);
   const fileName = `parkworks-saves-${day}.zip`;
-  downloadBlob(blob, fileName);
-  return { fileName, manifest };
+  return { blob, fileName, manifest };
+}
+
+export async function exportSaveBackup(module: OpenRct2Module): Promise<{ fileName: string; manifest: BackupManifest }> {
+  const artifact = await createSaveBackup(module);
+  downloadBlob(artifact.blob, artifact.fileName);
+  return { fileName: artifact.fileName, manifest: artifact.manifest };
 }
 
 function parseManifest(raw: string): BackupManifest {
