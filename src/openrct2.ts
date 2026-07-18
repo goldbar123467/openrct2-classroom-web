@@ -20,7 +20,7 @@ export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxDelayTicks = -1
 var schoolSandboxStep = 0;
 
 function scheduleSchoolSandbox() {
-    schoolSandboxDelayTicks = 200;
+    schoolSandboxDelayTicks = 1200;
     schoolSandboxStep = 0;
 }
 
@@ -35,21 +35,17 @@ function applySchoolSandbox() {
     }
 
     if (schoolSandboxStep === 0) {
-        park.setFlag("noMoney", true);
+        park.cash = 1000000000;
     } else if (schoolSandboxStep === 1) {
-        park.setFlag("unlockAllPrices", true);
-    } else if (schoolSandboxStep === 2) {
         cheats.sandboxMode = true;
-    } else if (schoolSandboxStep === 3) {
+    } else if (schoolSandboxStep === 2) {
         cheats.ignoreResearchStatus = true;
-    } else if (schoolSandboxStep === 4) {
+    } else if (schoolSandboxStep === 3) {
         park.research.funding = 0;
-    } else if (schoolSandboxStep === 5) {
-        scenario.objective.type = "haveFun";
     } else {
         park.postMessage({
             type: "blank",
-            text: "School Sandbox active: no money, sandbox tools, and all research unlocked."
+            text: "School Sandbox active: $100 million, sandbox tools, and all research unlocked."
         });
         schoolSandboxDelayTicks = -1;
         return;
@@ -72,7 +68,7 @@ function main() {
 
 registerPlugin({
     name: "Parkworks School Sandbox",
-    version: "1.0.1",
+    version: "1.0.2",
     authors: ["Parkworks"],
     type: "intransient",
     licence: "MIT",

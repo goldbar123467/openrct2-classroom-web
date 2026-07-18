@@ -64,13 +64,13 @@ describe("production security configuration", () => {
 
   it("installs the native school sandbox policy without embedding licensed assets", () => {
     const source = readFileSync("src/openrct2.ts", "utf8");
-    expect(source).toContain('park.setFlag("noMoney", true)');
+    expect(source).toContain("park.cash = 1000000000");
     expect(source).toContain("cheats.sandboxMode = true");
     expect(source).toContain("cheats.ignoreResearchStatus = true");
     expect(source).toContain("park.research.funding = 0");
+    expect(source).not.toContain("park.setFlag");
     expect(source).not.toContain("research.inventedItems");
     expect(source).not.toContain("research.uninventedItems");
-    expect(source).toContain('scenario.objective.type = "haveFun"');
     expect(source).toContain('type: "intransient"');
   });
 
