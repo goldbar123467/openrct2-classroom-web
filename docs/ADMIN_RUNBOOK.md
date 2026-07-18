@@ -54,6 +54,16 @@ The importer checks browser quota and rejects ZIPs over 1.25 GB, more than 12,00
 
 Use Vercel’s deployment history to promote the last known-good deployment. Confirm its engine hash against that release’s `scripts/engine-manifest.json`. Preserve the broken deployment URL and logs for diagnosis.
 
+After rollback, dispatch **Production deployment gate** for the rollback commit or run the external Playwright probe manually. A rollback is not complete until the live commit marker, all distribution hashes, response headers, IDBFS reload, backup restore, and offline shell pass. Record the drill in `docs/evidence/`.
+
+## Release monitoring and limits
+
+- Check the Vercel project transfer, build, and deployment usage before each classroom term and after any unexpected traffic spike.
+- Keep the immediately previous READY deployment available until the new release passes the production gate and one classroom pilot.
+- Review production browser evidence and Vercel runtime/build logs after every release. This static project intentionally has no student analytics or third-party telemetry.
+- Assign a named maintainer and backup maintainer for GitHub/Vercel, plus separate owners for licensing, ChromeOS policy, accessibility/accommodations, and classroom incident response.
+- Set a documented transfer/budget alert threshold in the district account. The repository cannot choose or approve that threshold on the district's behalf.
+
 ## Upstream engine update
 
 1. Review the OpenRCT2 release and license changes.

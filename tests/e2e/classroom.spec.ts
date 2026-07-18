@@ -2,15 +2,20 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 
-test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ page }) => {
+test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ page }, testInfo) => {
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
+  await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/?e2e=accessibility");
   await expect(page.getByRole("heading", { name: /Your park runs on this Chromebook/ })).toBeVisible();
+
+  const desktopScreenshot = testInfo.outputPath("launcher-1366x768.png");
+  await page.screenshot({ path: desktopScreenshot, fullPage: true });
+  await testInfo.attach("launcher-1366x768", { path: desktopScreenshot, contentType: "image/png" });
 
   const accessibility = await new AxeBuilder({ page }).analyze();
   expect(accessibility.violations).toEqual([]);
@@ -31,10 +36,36 @@ test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ p
   }));
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
   await expect(page.getByRole("button", { name: "Remove game files" })).toBeAttached();
+  const zoomScreenshot = testInfo.outputPath("launcher-effective-200-percent.png");
+  await page.screenshot({ path: zoomScreenshot, fullPage: true });
+  await testInfo.attach("launcher-effective-200-percent", { path: zoomScreenshot, contentType: "image/png" });
+
+  const shellPerformance = await page.evaluate(() => {
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    const navigatorWithMemory = navigator as Navigator & { deviceMemory?: number };
+    return {
+      navigation: navigation
+        ? {
+            responseStartMs: navigation.responseStart,
+            domContentLoadedMs: navigation.domContentLoadedEventEnd,
+            loadMs: navigation.loadEventEnd,
+            transferBytes: navigation.transferSize,
+          }
+        : null,
+      deviceMemoryGiB: navigatorWithMemory.deviceMemory ?? null,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      crossOriginIsolated,
+      viewport: { width: innerWidth, height: innerHeight },
+    };
+  });
+  await testInfo.attach("shell-performance", {
+    body: Buffer.from(JSON.stringify(shellPerformance, null, 2)),
+    contentType: "application/json",
+  });
   expect(consoleErrors).toEqual([]);
 });
 
-test("production-shaped shell boots Lite engine, persists a save, and reloads offline", async ({ baseURL, context, page }) => {
+test("production-shaped shell boots Lite engine, persists a save, and reloads offline", async ({ baseURL, context, page }, testInfo) => {
   if (!baseURL) throw new Error("Playwright baseURL is required for the classroom flow.");
   const expectedOrigin = new URL(baseURL).origin;
   const consoleErrors: string[] = [];
@@ -49,6 +80,10 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
 
   const response = await page.request.get("/");
   expect(response.status()).toBe(200);
+  const expectedBuildCommit = process.env.EXPECTED_BUILD_COMMIT;
+  if (expectedBuildCommit) {
+    expect(await response.text()).toContain(`<meta name="parkworks-commit" content="${expectedBuildCommit}" />`);
+  }
   expect(response.headers()["cross-origin-opener-policy"]).toBe("same-origin");
   expect(response.headers()["cross-origin-embedder-policy"]).toBe("require-corp");
   expect(response.headers()["x-content-type-options"]).toBe("nosniff");
@@ -60,12 +95,14 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
   }
   await expect(page.locator("#offline-status")).toContainText("Launcher ready");
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  const engineBootStarted = Date.now();
   await page.getByRole("button", { name: /Open the park/ }).click();
 
   await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
   await expect(page.locator("#worker-value")).toHaveText("2");
   await expect(page.locator("#storage-status")).toContainText(/MB of|GB of|Available|Persistent/);
   await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
+  const engineBootMilliseconds = Date.now() - engineBootStarted;
   expect([...requestOrigins]).toEqual([expectedOrigin]);
   expect(consoleErrors).toEqual([]);
 
@@ -180,6 +217,23 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
     ]),
   );
 
+  await testInfo.attach("lite-engine-performance", {
+    body: Buffer.from(
+      JSON.stringify(
+        {
+          engineBootMilliseconds,
+          workerCount: 2,
+          wasmInitialMemoryMiB: 512,
+          sameOriginRequests: [...requestOrigins],
+          cachedResponses: cacheSnapshot.entries.length,
+        },
+        null,
+        2,
+      ),
+    ),
+    contentType: "application/json",
+  });
+
   await context.setOffline(true);
   await page.reload({ timeout: 30_000, waitUntil: "domcontentloaded" });
   const offlineState = await page.evaluate(async () => ({
@@ -192,4 +246,71 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
   }).toBeVisible();
   await expect(page.locator("#network-indicator")).toContainText("Offline-ready");
   await context.setOffline(false);
+});
+
+test("an app-cache update preserves IDBFS saves and clears only the legacy release cache", async ({ page }) => {
+  await page.goto("/?e2e=app-update-before");
+  await page.evaluate(async () => navigator.serviceWorker.ready.then(() => true));
+  await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  await page.getByRole("button", { name: /Open the park/ }).click();
+  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+
+  await page.evaluate(async () => {
+    const module = (window as unknown as {
+      __parkworksModule?: {
+        FS: {
+          writeFile(path: string, data: Uint8Array): void;
+          syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+        };
+      };
+    }).__parkworksModule;
+    if (!module) throw new Error("OpenRCT2 module was not exposed before the update simulation.");
+    module.FS.writeFile("/persistent/e2e-update.park", new Uint8Array([85, 80, 68, 65, 84, 69, 7]));
+    await new Promise<void>((resolve, reject) => module.FS.syncfs(false, (error) => (error ? reject(error) : resolve())));
+    localStorage.setItem("parkworks-e2e-update-marker", "before-update");
+    const legacy = await caches.open("parkworks-v6-9de2d43fb6-classroom2");
+    await legacy.put("/legacy-release-marker", new Response("legacy"));
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration || !(await registration.unregister())) throw new Error("Could not retire the previous app worker.");
+  });
+
+  await page.reload();
+  await page.evaluate(async () => navigator.serviceWorker.ready.then(() => true));
+  await expect
+    .poll(() => page.evaluate(async () => !(await caches.keys()).includes("parkworks-v6-9de2d43fb6-classroom2")))
+    .toBe(true);
+  expect(await page.evaluate(() => localStorage.getItem("parkworks-e2e-update-marker"))).toBe("before-update");
+
+  await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  await page.getByRole("button", { name: /Open the park/ }).click();
+  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  expect(
+    await page.evaluate(() => {
+      const module = (window as unknown as {
+        __parkworksModule?: {
+          FS: {
+            readFile(path: string): Uint8Array;
+            unlink(path: string): void;
+            syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+          };
+        };
+      }).__parkworksModule;
+      if (!module) throw new Error("OpenRCT2 module was not exposed after the update simulation.");
+      return [...module.FS.readFile("/persistent/e2e-update.park")];
+    }),
+  ).toEqual([85, 80, 68, 65, 84, 69, 7]);
+
+  await page.evaluate(async () => {
+    const module = (window as unknown as {
+      __parkworksModule: {
+        FS: {
+          unlink(path: string): void;
+          syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+        };
+      };
+    }).__parkworksModule;
+    module.FS.unlink("/persistent/e2e-update.park");
+    await new Promise<void>((resolve, reject) => module.FS.syncfs(false, (error) => (error ? reject(error) : resolve())));
+    localStorage.removeItem("parkworks-e2e-update-marker");
+  });
 });

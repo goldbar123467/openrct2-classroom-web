@@ -18,20 +18,19 @@ if (Test-Path -LiteralPath $ResolvedStaging) {
 New-Item -ItemType Directory -Path $ResolvedStaging | Out-Null
 New-Item -ItemType Directory -Force -Path $EngineOut | Out-Null
 
-$EngineArtifact = "OpenRCT2-v0.5.3-49-g9de2d43fb6-emscripten"
 $PortableArtifact = "OpenRCT2-v0.5.3-49-g9de2d43fb6-Windows-portable-x64"
-gh run download $RunId --repo OpenRCT2/OpenRCT2 --name $EngineArtifact --dir (Join-Path $ResolvedStaging "emscripten")
+
+& (Join-Path $PSScriptRoot "rebuild-engine.ps1") -OutputDirectory "public\engine"
+if ($LASTEXITCODE -ne 0) { throw "The pinned source-to-WASM rebuild failed." }
+
 gh run download $RunId --repo OpenRCT2/OpenRCT2 --name $PortableArtifact --dir (Join-Path $ResolvedStaging "portable")
 
 $PortableZip = Get-ChildItem -LiteralPath (Join-Path $ResolvedStaging "portable") -Filter "*.zip" -File | Select-Object -First 1
 if (-not $PortableZip) { throw "Portable OpenRCT2 archive was not downloaded." }
 Expand-Archive -LiteralPath $PortableZip.FullName -DestinationPath (Join-Path $ResolvedStaging "portable-extracted")
 
-Copy-Item -LiteralPath (Join-Path $ResolvedStaging "emscripten\openrct2.js") -Destination (Join-Path $EngineOut "openrct2.js") -Force
-Copy-Item -LiteralPath (Join-Path $ResolvedStaging "emscripten\openrct2.wasm") -Destination (Join-Path $EngineOut "openrct2.wasm") -Force
 $AssetsZip = Join-Path $EngineOut "assets.zip"
 if (Test-Path -LiteralPath $AssetsZip) { Remove-Item -LiteralPath $AssetsZip -Force }
 Compress-Archive -Path (Join-Path $ResolvedStaging "portable-extracted\data"),(Join-Path $ResolvedStaging "portable-extracted\changelog.txt") -DestinationPath $AssetsZip -CompressionLevel Optimal
 
-node (Join-Path $PSScriptRoot "patch-engine.mjs")
-Write-Output "Engine files refreshed. Update scripts/engine-manifest.json with the new SHA-256 hashes before committing."
+Write-Output "Engine and open assets refreshed from pinned source/artifacts. Update scripts/engine-manifest.json, then run npm run verify:engine before committing."

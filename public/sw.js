@@ -1,4 +1,4 @@
-const CACHE_VERSION = "parkworks-v6-9de2d43fb6-classroom2";
+const CACHE_VERSION = "parkworks-v7-9de2d43fb6-release";
 const SHELL_URLS = ["/manifest.webmanifest", "/parkworks-icon.png"];
 
 async function installShell() {

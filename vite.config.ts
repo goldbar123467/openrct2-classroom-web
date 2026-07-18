@@ -1,5 +1,8 @@
 import { defineConfig } from "vite";
 
+const candidateCommit = process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? "development";
+const buildCommit = /^[0-9a-f]{40}$/i.test(candidateCommit) ? candidateCommit.toLowerCase() : "development";
+
 const productionHeaders = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "require-corp",
@@ -12,6 +15,17 @@ const productionHeaders = {
 };
 
 export default defineConfig({
+  define: {
+    __BUILD_COMMIT__: JSON.stringify(buildCommit),
+  },
+  plugins: [
+    {
+      name: "parkworks-build-provenance",
+      transformIndexHtml(html) {
+        return html.replace("</head>", `    <meta name="parkworks-commit" content="${buildCommit}" />\n  </head>`);
+      },
+    },
+  ],
   server: {
     host: "127.0.0.1",
     headers: productionHeaders,

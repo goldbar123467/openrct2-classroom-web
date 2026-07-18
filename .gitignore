@@ -10,6 +10,7 @@ release-evidence/
 .upstream-portable/
 .upstream-portable-extracted/
 .engine-staging/
+.engine-rebuild/
 *.log
 .env
 .env.*
