@@ -2,9 +2,11 @@ import JSZip from "jszip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_RCT_ZIP_BYTES } from "../src/engine-utils";
 import {
+  SCHOOL_SANDBOX_PLUGIN,
   clearRctData,
   hasRctData,
   importRctArchive,
+  installSchoolSandboxPlugin,
   walkFiles,
   type ProgressReporter,
 } from "../src/openrct2";
@@ -68,6 +70,20 @@ describe("licensed RCT2 archive transaction", () => {
     await clearRctData(module);
     expect(hasRctData(module)).toBe(false);
     expect(localStorage.getItem("parkworks.rctImport")).toBeNull();
+  });
+
+  it("installs the school sandbox as an idempotent OpenRCT2 user plugin", async () => {
+    const module = createMemoryModule();
+    const fs = module.FS as MemoryFs;
+
+    await installSchoolSandboxPlugin(module);
+
+    expect(fs.readFile("/persistent/plugin/parkworks-school-sandbox.js", { encoding: "utf8" }))
+      .toBe(SCHOOL_SANDBOX_PLUGIN);
+    expect(fs.syncCalls).toEqual([false]);
+
+    await installSchoolSandboxPlugin(module);
+    expect(fs.syncCalls).toEqual([false]);
   });
 
   it("contains traversal-like names inside the private RCT mount", async () => {

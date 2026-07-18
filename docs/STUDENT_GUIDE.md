@@ -10,7 +10,8 @@ Your teacher will give you the Parkworks web address and classroom password. The
 2. Keep **Classroom lite** selected unless your teacher says otherwise.
 3. Choose **Open the park**.
 4. Leave the tab open while the progress track moves. The first setup downloads the school package; later starts use private browser storage.
-5. Play with OpenRCT2's native game controls.
+5. At the OpenRCT2 title menu, choose **New Game** and pick the map you want to build on.
+6. Play with OpenRCT2's native game controls. Every loaded park starts as the School Sandbox: money is disabled, sandbox tools are on, and all available research is unlocked.
 
 Installed game data stays inside the Chromebook’s browser database and is not uploaded back to the server.
 
@@ -19,7 +20,7 @@ Installed game data stays inside the Chromebook’s browser database and is not 
 1. Press `Space` to pause while planning.
 2. Connect a path to the park entrance.
 3. Place one gentle ride, its entrance, its exit, and a queue.
-4. Open the ride and set a reasonable price.
+4. Open the ride. The School Sandbox does not charge for construction or require ride prices.
 5. Watch guest thoughts and keep the path clean.
 
 Useful controls: arrow keys pan, Page Up/Down zoom, Space pauses, and Esc closes the top in-game window.

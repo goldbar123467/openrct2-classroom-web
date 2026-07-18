@@ -14,7 +14,7 @@ Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engin
 | 512 MiB / two-worker boot | Real WebAssembly initialization and 2,500+ open assets installed in browser | Passed on desktop Chromium |
 | Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, app-cache upgrade, and offline reload | Passed with synthetic `.park` bytes |
 | No proprietary game data in deploy | CI archive/name scanner | Passed |
-| Real RCT2 asset import and gameplay | Protected 705 MB package, automatic 2,457-file browser install, rendered Crazy Castle, native zoom/window controls | Passed on the live school site |
+| Real RCT2 asset import and gameplay | Protected 705 MB package, automatic 2,457-file browser install, native title menu, zoom/window controls, and school sandbox policy | Passed on the live school site |
 | Lowest-spec managed Chromebook soak | Requires the district’s actual hardware | Not yet proven |
 | Production school deployment | [Password-protected Parkworks](https://parkworks.upsidedownatlas.com); Cloudflare Tunnel to loopback-only Caddy | Live |
 
@@ -25,8 +25,9 @@ The project is intentionally not called “complete” until the same production
 1. Open the password-protected HTTPS school site in a current managed Chrome browser.
 2. Choose **Classroom lite** on a 4 GB Chromebook.
 3. Choose **Open the park**. On first launch, the protected package downloads and installs automatically into private browser storage.
-4. Use OpenRCT2's native full-screen controls and normal in-game save menu.
-5. Reload to the launcher when class is over, export a Parkworks save backup, and store it in Google Drive or another approved location.
+4. Open **New Game** from OpenRCT2's title menu and choose a starting map. Parkworks applies no-money play, native sandbox tools, a have-fun objective, and complete research to the loaded park.
+5. Use OpenRCT2's native full-screen controls and normal in-game save menu.
+6. Reload to the launcher when class is over, export a Parkworks save backup, and store it in Google Drive or another approved location.
 
 See [the one-page student guide](docs/STUDENT_GUIDE.md).
 

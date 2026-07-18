@@ -10,11 +10,12 @@ Do not place game files in GitHub, Vercel, a public Drive link, a CI artifact, o
 
 1. Record the weakest Chromebook model, CPU, RAM, storage, screen resolution, and ChromeOS version.
 2. Test the exact production URL on that model, not only a teacher laptop.
-3. Import the approved ZIP and start a beginner scenario.
+3. Open the native title menu, start a beginner map, and confirm the School Sandbox message appears.
 4. Verify build, rotate, zoom, pause, save, browser restart, device reboot, and resume.
-5. Run a 60-minute medium-park session while watching ChromeOS Diagnostics for memory and thermal problems.
-6. Export, erase, and restore a save backup; compare the recorded SHA-256 manifest.
-7. Repeat on an ARM Chromebook if the fleet contains ARM devices.
+5. Verify the money toolbar is absent, sandbox editing works, and every item in the selected map's research list is available.
+6. Run a 60-minute medium-park session while watching ChromeOS Diagnostics for memory and thermal problems.
+7. Export, erase, and restore a save backup; compare the recorded SHA-256 manifest.
+8. Repeat on an ARM Chromebook if the fleet contains ARM devices.
 
 Do not roll out class-wide until [the verification matrix](VERIFICATION.md) is signed for the lowest-spec device.
 

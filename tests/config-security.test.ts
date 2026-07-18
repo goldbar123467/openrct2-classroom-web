@@ -57,6 +57,19 @@ describe("production security configuration", () => {
     const source = readFileSync("src/openrct2.ts", "utf8");
     expect(source).toContain('"--openrct2-data-path=/OpenRCT2/"');
     expect(source).toContain('"--rct2-data-path=/RCT/"');
+    expect(source).toContain("module.callMain([...GAME_STARTUP_ARGUMENTS])");
+    expect(source).not.toContain("chooseStartupScenario");
+    expect(source).not.toContain('"/RCT/Scenarios"');
+  });
+
+  it("installs the native school sandbox policy without embedding licensed assets", () => {
+    const source = readFileSync("src/openrct2.ts", "utf8");
+    expect(source).toContain('park.setFlag("noMoney", true)');
+    expect(source).toContain("cheats.sandboxMode = true");
+    expect(source).toContain("cheats.ignoreResearchStatus = true");
+    expect(source).toContain('research.stage = "finished_all"');
+    expect(source).toContain('scenario.objective.type = "haveFun"');
+    expect(source).toContain('type: "intransient"');
   });
 
   it("builds engine requests from the credential-free browser origin", () => {

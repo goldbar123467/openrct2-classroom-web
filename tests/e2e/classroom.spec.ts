@@ -99,7 +99,7 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
   const engineBootStarted = Date.now();
   await page.getByRole("button", { name: /Open the park/ }).click();
 
-  await expect(page.getByRole("alert")).toContainText("your RCT2 or RCT Classic ZIP", { timeout: 90_000 });
+  await expect(page.getByRole("alert")).toContainText("Add a ZIP from a legally owned RCT2 or RCT Classic installation", { timeout: 90_000 });
   await expect(page.locator("#worker-value")).toHaveText("2");
   await expect(page.locator("#storage-status")).toContainText(/MB of|GB of|Available|Persistent/);
   await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
@@ -130,7 +130,7 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
   await page.reload();
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
   await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("your RCT2 or RCT Classic ZIP", { timeout: 90_000 });
+  await expect(page.getByRole("alert")).toContainText("Add a ZIP from a legally owned RCT2 or RCT Classic installation", { timeout: 90_000 });
   const restoredSave = await page.evaluate(() => {
     const module = (window as unknown as {
       __parkworksModule?: {
@@ -254,7 +254,7 @@ test("an app-cache update preserves IDBFS saves and clears only the legacy relea
   await page.evaluate(async () => navigator.serviceWorker.ready.then(() => true));
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
   await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("your RCT2 or RCT Classic ZIP", { timeout: 90_000 });
+  await expect(page.getByRole("alert")).toContainText("Add a ZIP from a legally owned RCT2 or RCT Classic installation", { timeout: 90_000 });
 
   await page.evaluate(async () => {
     const module = (window as unknown as {
@@ -284,7 +284,7 @@ test("an app-cache update preserves IDBFS saves and clears only the legacy relea
 
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
   await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("your RCT2 or RCT Classic ZIP", { timeout: 90_000 });
+  await expect(page.getByRole("alert")).toContainText("Add a ZIP from a legally owned RCT2 or RCT Classic installation", { timeout: 90_000 });
   expect(
     await page.evaluate(() => {
       const module = (window as unknown as {

@@ -11,9 +11,66 @@ import {
 } from "./engine-utils";
 
 const ENGINE_BASE = "/engine";
-const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-school3`;
+const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-school4`;
 const ENGINE_ASSET_LIMIT = 250_000_000;
 const ENGINE_ASSET_ENTRY_LIMIT = 5_000;
+const SCHOOL_SANDBOX_PLUGIN_PATH = "/persistent/plugin/parkworks-school-sandbox.js";
+
+export const SCHOOL_SANDBOX_PLUGIN = String.raw`var shouldApplySchoolSandbox = false;
+
+function applySchoolSandbox() {
+    if (!shouldApplySchoolSandbox || context.mode !== "normal") {
+        return;
+    }
+
+    shouldApplySchoolSandbox = false;
+    park.setFlag("noMoney", true);
+    park.setFlag("unlockAllPrices", true);
+    cheats.sandboxMode = true;
+    cheats.ignoreResearchStatus = true;
+
+    var research = park.research;
+    var allItems = research.inventedItems.concat(research.uninventedItems);
+    research.stage = "finished_all";
+    research.inventedItems = allItems;
+    research.uninventedItems = [];
+    research.funding = 0;
+
+    scenario.objective.type = "haveFun";
+    scenario.status = "inProgress";
+    park.postMessage({
+        type: "blank",
+        text: "School Sandbox active: no money, sandbox tools, and all research unlocked."
+    });
+}
+
+function main() {
+    context.subscribe("map.changed", function () {
+        shouldApplySchoolSandbox = true;
+    });
+    context.subscribe("interval.tick", applySchoolSandbox);
+
+    if (context.mode === "normal") {
+        shouldApplySchoolSandbox = true;
+    }
+}
+
+registerPlugin({
+    name: "Parkworks School Sandbox",
+    version: "1.0.0",
+    authors: ["Parkworks"],
+    type: "intransient",
+    licence: "MIT",
+    targetApiVersion: 116,
+    main: main
+});
+`;
+
+export const GAME_STARTUP_ARGUMENTS = [
+  "--user-data-path=/persistent/",
+  "--openrct2-data-path=/OpenRCT2/",
+  "--rct2-data-path=/RCT/",
+] as const;
 
 function engineAssetUrl(fileName: string): string {
   // Use the credential-free origin even when a test navigates with Basic Auth
@@ -490,14 +547,16 @@ async function prepareBrowserStartupConfig(
   }
 }
 
-function chooseStartupScenario(module: OpenRct2Module): string | null {
-  const scenarioDirectory = "/RCT/Scenarios";
-  if (!pathExists(module.FS, scenarioDirectory)) return null;
-  const names = module.FS.readdir(scenarioDirectory).filter((name) => name.toLowerCase().endsWith(".sc6"));
-  const preferred = ["Crazy Castle.SC6", "Factory Capers.SC6"];
-  const selected = preferred.find((name) => names.some((candidate) => candidate.toLowerCase() === name.toLowerCase()))
-    ?? names.sort((left, right) => left.localeCompare(right, "en")).at(0);
-  return selected ? `${scenarioDirectory}/${selected}` : null;
+export async function installSchoolSandboxPlugin(module: OpenRct2Module): Promise<void> {
+  ensureDirectory(module.FS, "/persistent/plugin");
+  const existing = pathExists(module.FS, SCHOOL_SANDBOX_PLUGIN_PATH)
+    ? module.FS.readFile(SCHOOL_SANDBOX_PLUGIN_PATH, { encoding: "utf8" })
+    : "";
+  const source = typeof existing === "string" ? existing : new TextDecoder().decode(existing);
+  if (source !== SCHOOL_SANDBOX_PLUGIN) {
+    module.FS.writeFile(SCHOOL_SANDBOX_PLUGIN_PATH, SCHOOL_SANDBOX_PLUGIN);
+    await syncFileSystem(module);
+  }
 }
 
 export async function clearRctData(module: OpenRct2Module): Promise<void> {
@@ -523,14 +582,9 @@ export async function startGame(module: OpenRct2Module): Promise<void> {
   module.canvas.height = viewport.height;
   // OpenRCT2's desktop DPI inference divides by an SDL window width that is zero during browser startup.
   await prepareBrowserStartupConfig(module, viewport);
+  await installSchoolSandboxPlugin(module);
   try {
-    const startupScenario = chooseStartupScenario(module);
-    module.callMain([
-      ...(startupScenario ? [startupScenario] : []),
-      "--user-data-path=/persistent/",
-      "--openrct2-data-path=/OpenRCT2/",
-      "--rct2-data-path=/RCT/",
-    ]);
+    module.callMain([...GAME_STARTUP_ARGUMENTS]);
   } catch (error) {
     // emscripten_set_main_loop(..., simulateInfiniteLoop = 1) deliberately
     // unwinds callMain after registering the browser's animation loop.
