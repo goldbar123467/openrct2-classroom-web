@@ -29,15 +29,8 @@ function applySchoolSandbox() {
     cheats.sandboxMode = true;
     cheats.ignoreResearchStatus = true;
 
-    var research = park.research;
-    var allItems = research.inventedItems.concat(research.uninventedItems);
-    research.stage = "finished_all";
-    research.inventedItems = allItems;
-    research.uninventedItems = [];
-    research.funding = 0;
-
+    park.research.funding = 0;
     scenario.objective.type = "haveFun";
-    scenario.status = "inProgress";
     park.postMessage({
         type: "blank",
         text: "School Sandbox active: no money, sandbox tools, and all research unlocked."

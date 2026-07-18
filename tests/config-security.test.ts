@@ -67,7 +67,9 @@ describe("production security configuration", () => {
     expect(source).toContain('park.setFlag("noMoney", true)');
     expect(source).toContain("cheats.sandboxMode = true");
     expect(source).toContain("cheats.ignoreResearchStatus = true");
-    expect(source).toContain('research.stage = "finished_all"');
+    expect(source).toContain("park.research.funding = 0");
+    expect(source).not.toContain("research.inventedItems");
+    expect(source).not.toContain("research.uninventedItems");
     expect(source).toContain('scenario.objective.type = "haveFun"');
     expect(source).toContain('type: "intransient"');
   });

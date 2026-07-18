@@ -1,4 +1,4 @@
-const CACHE_VERSION = "parkworks-v12-9de2d43fb6-school-sandbox";
+const CACHE_VERSION = "parkworks-v13-9de2d43fb6-school-sandbox";
 const SHELL_URLS = ["/manifest.webmanifest", "/parkworks-icon.png"];
 
 async function installShell() {
