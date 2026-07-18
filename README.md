@@ -75,7 +75,7 @@ npm run evidence:dist   # deterministic SHA-256 manifest for every built file
 
 GitHub Actions runs these gates from `npm ci`, installs the pinned Playwright Chromium build, and uploads a commit-addressed CycloneDX SBOM, dependency-license report, engine manifest, and distribution hash manifest.
 
-The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit on the immutable container filesystem with pinned one-job Ninja, Emscripten, `wasm-ld`, and ThinLTO scheduling. It must reproduce the exact shipped JS/WASM hashes in `scripts/engine-manifest.json`, then builds the launcher around that freshly generated pair and boots it through the browser suite. Run the same strict comparison locally with:
+The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit on the immutable container filesystem with IPO disabled and pinned one-job Ninja, Emscripten, and `wasm-ld` scheduling. It must reproduce the exact shipped JS/WASM hashes in `scripts/engine-manifest.json`, then builds the launcher around that freshly generated pair and boots it through the browser suite. Run the same strict comparison locally with:
 
 ```powershell
 ./scripts/rebuild-engine.ps1 -VerifyManifest

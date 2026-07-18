@@ -78,8 +78,8 @@ git apply --unidiff-zero /tmp/engine-lite.patch
 grep -q 'MAXIMUM_MEMORY=2GB' scripts/build-emscripten
 grep -q 'INITIAL_MEMORY=512MB' scripts/build-emscripten
 grep -q 'PTHREAD_POOL_SIZE=4' scripts/build-emscripten
+grep -q 'DISABLE_IPO=ON' scripts/build-emscripten
 grep -q -- '-Wl,--threads=1' scripts/build-emscripten
-grep -q -- '-Wl,--thinlto-jobs=1' scripts/build-emscripten
 grep -q 'emmake ninja -j 1' scripts/build-emscripten
 if grep -q "$(printf '\r')" scripts/build-emscripten; then
   echo 'Upstream Linux build script contains a carriage return; checkout normalization is unsafe.' >&2
@@ -128,7 +128,7 @@ $Metadata = [ordered]@{
     buildJobs = 1
     emccCores = 1
     linkerThreads = 1
-    thinLtoJobs = 1
+    ipoDisabled = $true
     hermeticContainerFilesystem = $true
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
     files = [ordered]@{}
