@@ -632,8 +632,8 @@ export async function startGame(module: OpenRct2Module, openMagicMountain = fals
   await installSchoolSandboxPlugin(module);
   try {
     module.callMain([
-      ...GAME_STARTUP_ARGUMENTS,
       ...(openMagicMountain ? [SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH] : []),
+      ...GAME_STARTUP_ARGUMENTS,
     ]);
   } catch (error) {
     // emscripten_set_main_loop(..., simulateInfiniteLoop = 1) deliberately

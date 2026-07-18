@@ -1,4 +1,4 @@
-const CACHE_VERSION = "parkworks-v20-9de2d43fb6-magic-mountain-direct";
+const CACHE_VERSION = "parkworks-v21-9de2d43fb6-magic-mountain-argv";
 const SHELL_URLS = ["/manifest.webmanifest", "/parkworks-icon.png"];
 
 async function installShell() {
