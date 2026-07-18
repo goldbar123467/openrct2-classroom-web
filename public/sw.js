@@ -1,5 +1,5 @@
-const CACHE_VERSION = "parkworks-v3-9de2d43fb6-classroom2";
-const SHELL_URLS = ["/", "/manifest.webmanifest", "/icon.svg"];
+const CACHE_VERSION = "parkworks-v4-9de2d43fb6-classroom2";
+const SHELL_URLS = ["/", "/manifest.webmanifest", "/parkworks-icon.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_URLS)));
