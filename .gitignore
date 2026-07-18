@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.vercel/
+playwright-report/
+test-results/
+coverage/
+.upstream-artifact/
+.upstream-graphics/
+.upstream-portable/
+.upstream-portable-extracted/
+.engine-staging/
+*.log
+.env
+.env.*
+!.env.example

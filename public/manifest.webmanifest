@@ -1,0 +1,21 @@
+{
+  "name": "Parkworks — OpenRCT2 Classroom",
+  "short_name": "Parkworks",
+  "description": "A Chromebook-first classroom launcher for OpenRCT2.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#eee4c9",
+  "theme_color": "#193c33",
+  "categories": ["games", "education"],
+  "icons": [
+    {
+      "src": "/parkworks-icon.png",
+      "sizes": "1254x1254",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

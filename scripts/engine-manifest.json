@@ -1,0 +1,25 @@
+{
+  "engineVersion": "v0.5.3-49-g9de2d43fb6",
+  "upstreamRepository": "https://github.com/OpenRCT2/OpenRCT2",
+  "upstreamCommit": "9de2d43fb6e7d6a6213336125a4afbddf8cc167c",
+  "githubActionsRun": "29610479932",
+  "retrievedAt": "2026-07-17T20:28:36Z",
+  "modifications": [
+    "Default WebAssembly initial memory reduced from 2048 MiB to 512 MiB.",
+    "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers."
+  ],
+  "files": {
+    "public/engine/openrct2.js": {
+      "bytes": 280641,
+      "sha256": "4241cc8f2fe41adf049824a7e58959bb9a3c1305af2479f7861d8673ab9948d4"
+    },
+    "public/engine/openrct2.wasm": {
+      "bytes": 15273506,
+      "sha256": "bde90a0e5ba3041c6235e64d038d5dd808995401f383e6d79890b9cfcd9c3467"
+    },
+    "public/engine/assets.zip": {
+      "bytes": 71513944,
+      "sha256": "3bcd17de10cfecfffb90186eebaa60cbd05b472b6c95c9aa4129d927f88e98db"
+    }
+  }
+}

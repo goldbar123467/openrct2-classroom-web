@@ -1,0 +1,30 @@
+{
+  "name": "openrct2-classroom-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A Chromebook-first, local-save classroom launcher for the OpenRCT2 WebAssembly engine.",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run verify:engine && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "verify:engine": "node scripts/verify-engine.mjs",
+    "verify:assets": "node scripts/scan-proprietary-assets.mjs",
+    "check": "npm run verify:assets && npm test && npm run build"
+  },
+  "dependencies": {
+    "jszip": "3.10.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "typescript": "7.0.2",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
