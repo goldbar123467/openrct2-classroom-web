@@ -50,7 +50,10 @@ jobs:
           name: parkworks-engine-rebuild-${{ github.sha }}
           path: |
             .engine-rebuild/output/rebuild-metadata.json
+            .engine-rebuild/output/openrct2.js
+            .engine-rebuild/output/openrct2.wasm
             test-results/
             playwright-report/
           if-no-files-found: ignore
+          compression-level: 9
           retention-days: 90

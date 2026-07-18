@@ -12,12 +12,15 @@
     "sharedMemory": true,
     "pthreadPoolSize": 4,
     "buildJobs": 1,
+    "emccCores": 1,
+    "linkerThreads": 1,
+    "thinLtoJobs": 1,
     "hermeticContainerFilesystem": true
   },
   "modifications": [
     "Default WebAssembly initial memory reduced from 2048 MiB to 512 MiB.",
     "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers.",
-    "Ninja compilation pinned to one job and executed on the immutable container filesystem for byte reproducibility."
+    "Ninja compilation, Emscripten subprocesses, wasm-ld, and ThinLTO pinned to one job and executed on the immutable container filesystem for byte reproducibility."
   ],
   "files": {
     "public/engine/openrct2.js": {
