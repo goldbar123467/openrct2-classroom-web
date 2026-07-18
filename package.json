@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "license": "GPL-3.0-or-later",
   "description": "A Chromebook-first, local-save classroom launcher for the OpenRCT2 WebAssembly engine.",
   "scripts": {
     "dev": "vite",
@@ -13,12 +14,19 @@
     "test:e2e": "playwright test",
     "verify:engine": "node scripts/verify-engine.mjs",
     "verify:assets": "node scripts/scan-proprietary-assets.mjs",
-    "check": "npm run verify:assets && npm test && npm run build"
+    "verify:secrets": "node scripts/scan-secrets.mjs --history",
+    "verify:licenses": "node scripts/check-dependency-licenses.mjs",
+    "verify:sbom": "npm sbom --sbom-format cyclonedx | node scripts/validate-sbom.mjs",
+    "verify:security": "npm audit --audit-level=high && npm run verify:secrets && npm run verify:licenses && npm run verify:sbom",
+    "evidence:dist": "node scripts/hash-dist.mjs",
+    "check": "npm run verify:assets && npm test && npm run build",
+    "check:ci": "npm run check && npm run verify:security"
   },
   "dependencies": {
     "jszip": "3.10.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
     "@playwright/test": "1.61.1",
     "@types/node": "24.10.7",
     "typescript": "7.0.2",

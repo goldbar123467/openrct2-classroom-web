@@ -8,14 +8,15 @@ Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engin
 
 | Requirement | Evidence | Status |
 | --- | --- | --- |
-| Production shell at 1366×768 | Browser screenshot, semantic snapshot, no horizontal overflow | Passed locally |
-| Cross-origin isolation headers | Vite and Vercel header config; local response check | Passed locally |
+| Production shell and 200% effective viewport | Playwright/axe, keyboard, forced colors, reduced motion, no overflow | Passed in Chromium |
+| Cross-origin isolation headers | Local/Vercel config parity, response headers, `crossOriginIsolated` | Passed locally and live |
 | Custom OpenRCT2 engine | Pinned commit `9de2d43fb6e7d6a6213336125a4afbddf8cc167c`; SHA-256 manifest | Passed |
 | 512 MiB / two-worker boot | Real WebAssembly initialization and 2,500+ open assets installed in browser | Passed on desktop Chromium |
+| Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, and offline reload | Passed with synthetic `.park` bytes |
 | No proprietary game data in deploy | CI archive/name scanner | Passed |
 | Real RCT2 asset import and gameplay | Requires a lawfully owned local installation | Awaiting licensed test data |
 | Lowest-spec managed Chromebook soak | Requires the district’s actual hardware | Not yet proven |
-| Production Vercel deployment | Build is ready; deploy evidence added after publication | Pending |
+| Production Vercel deployment | [Public launcher](https://openrct2-classroom-web.vercel.app); each new commit is promoted only after CI | Live |
 
 The project is intentionally not called “complete” until the same production commit passes the real-device and licensed-gameplay gates in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
@@ -67,7 +68,12 @@ npm run verify:assets   # rejects proprietary RCT2 signatures in distributables
 npm test                # import/path/profile unit tests
 npm run build           # strict TypeScript + Vite production build
 npm run check           # all of the above
+npm run test:e2e        # accessibility, headers, real Lite boot, and offline reload
+npm run verify:security # audit, current/history secret scan, licenses, and SBOM
+npm run evidence:dist   # deterministic SHA-256 manifest for every built file
 ```
+
+GitHub Actions runs these gates from `npm ci`, installs the pinned Playwright Chromium build, and uploads a commit-addressed CycloneDX SBOM, dependency-license report, engine manifest, and distribution hash manifest.
 
 ## Engine provenance and GPL source
 

@@ -9,3 +9,6 @@
 - Added IndexedDB save persistence, storage status, periodic flush, and persistent-storage request.
 - Added checksum-verified save export and journaled restore/rollback.
 - Added offline cache, Vercel cross-origin isolation/security headers, GPL provenance, asset scan, unit tests, and classroom handoff documentation.
+- Added atomic in-memory save export/restore/rollback integration coverage and hostile licensed-ZIP import transactions.
+- Added Playwright/axe verification for keyboard use, 200% effective viewport, forced colors, reduced motion, exact Lite engine boot, same-origin networking, and full offline reload.
+- Added dependency audit, full-history secret scan, license policy, CycloneDX SBOM validation, security-header parity, and deterministic distribution hashes for release evidence.

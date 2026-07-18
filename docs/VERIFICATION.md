@@ -4,19 +4,19 @@ Every line must reference the exact Git commit and Vercel deployment. “Not obs
 
 | Gate | Required evidence | Current state |
 | --- | --- | --- |
-| Shell | 1366×768 + 200% screenshots, no overlap/horizontal overflow | Local 1366×768 passed; 200% pending |
-| Isolation | Production header dump, `crossOriginIsolated`, `SharedArrayBuffer` | Local headers/boot passed; production pending |
-| Engine | Version, commit, JS/WASM SHA-256, 512 MiB two-worker boot | Passed locally |
-| Legal import | Approved licensed ZIP, local-only network trace, delete/re-import | Pending licensed data |
+| Shell | 1366×768 + 200% screenshots, no overlap/horizontal overflow | Automated Chromium viewport/overflow and axe checks passed; manual screenshot archive pending |
+| Isolation | Production header dump, `crossOriginIsolated`, `SharedArrayBuffer` | Local response and live production passed; config parity is unit-tested |
+| Engine | Version, commit, JS/WASM SHA-256, 512 MiB two-worker boot | Exact hashes and real Lite boot passed in Chromium |
+| Legal import | Approved licensed ZIP, local-only network trace, delete/re-import | Synthetic hostile/valid structures passed; approved licensed data still pending |
 | Gameplay | Scenario start, build/rotate/zoom/pause/speed/menu, objective progress | Pending licensed data |
-| Saves | Manual/autosave, reload, browser restart, reboot, app update | Pending real gameplay/device |
-| Recovery | Export hashes, erase, restore, identical park/hash; corrupt ZIP rejection | Logic implemented; destructive real-park proof pending |
+| Saves | Manual/autosave, reload, browser restart, reboot, app update | Real IDBFS synthetic `.park` reload passed; actual gameplay, reboot, and app-update proof pending |
+| Recovery | Export hashes, erase, restore, identical park/hash; corrupt ZIP rejection | Real browser UI export/erase/restore passed with exact synthetic bytes; corrupt/rollback corpus passed; real-park proof pending |
 | Performance | 3 runs: LCP, warm boot, FPS, 1% low, latency, memory, thermals | Pending weakest Chromebook |
 | Soak | Two 60-minute sessions on weakest device | Pending |
-| Accessibility | axe, keyboard, 200%, forced colors, reduced motion, screen reader | Manual/automated evidence pending |
-| Security | no-third-party HAR, CSP/header scan, ZIP corpus, dependency/secret scan | Partial static gates passed |
-| Git/Vercel | public repo, Git connection, preview promotion, production URL, rollback | Pending |
-| GPL | exact source, build recipe, license/notices, source link | Implemented locally; public availability pending |
+| Accessibility | axe, keyboard, 200%, forced colors, reduced motion, screen reader | Automated wrapper gates passed with zero axe violations; manual screen-reader pass pending |
+| Security | no-third-party HAR, CSP/header scan, ZIP corpus, dependency/secret scan | Same-origin browser trace, header parity, ZIP corpus, audit, history secret scan, licenses, and SBOM passed locally |
+| Git/Vercel | public repo, Git connection, preview promotion, production URL, rollback | Public repo and production URL live; exact release/rollback record refreshed at promotion |
+| GPL | exact source, build recipe, license/notices, source link | Public exact source, hashes, license, notices, and rebuild recipe present |
 | Handoff | teacher/admin/student docs and clean-clone rehearsal | Docs implemented; second-person rehearsal pending |
 
 ## Provisional performance targets

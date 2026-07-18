@@ -1,8 +1,18 @@
-const CACHE_VERSION = "parkworks-v4-9de2d43fb6-classroom2";
-const SHELL_URLS = ["/", "/manifest.webmanifest", "/parkworks-icon.png"];
+const CACHE_VERSION = "parkworks-v6-9de2d43fb6-classroom2";
+const SHELL_URLS = ["/manifest.webmanifest", "/parkworks-icon.png"];
+
+async function installShell() {
+  const cache = await caches.open(CACHE_VERSION);
+  const rootResponse = await fetch("/", { cache: "reload" });
+  if (!rootResponse.ok) throw new Error(`Launcher shell returned ${rootResponse.status}.`);
+  await cache.put("/", rootResponse.clone());
+  const html = await rootResponse.text();
+  const entrypoints = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((match) => match[1]);
+  await cache.addAll([...SHELL_URLS, ...new Set(entrypoints)]);
+}
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_URLS)));
+  event.waitUntil(installShell());
   self.skipWaiting();
 });
 
@@ -25,7 +35,7 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/engine/")) {
     event.respondWith(
       caches.open(CACHE_VERSION).then(async (cache) => {
-        const cached = await cache.match(request);
+        const cached = await cache.match(request, { ignoreVary: true });
         if (cached) return cached;
         const response = await fetch(request);
         if (response.ok) await cache.put(request, response.clone());
@@ -44,14 +54,11 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(
     caches.open(CACHE_VERSION).then(async (cache) => {
-      const cached = await cache.match(request);
-      const network = fetch(request)
-        .then(async (response) => {
-          if (response.ok) await cache.put(request, response.clone());
-          return response;
-        })
-        .catch(() => cached || Response.error());
-      return cached || network;
+      const cached = await cache.match(request, { ignoreVary: true });
+      if (cached) return cached;
+      const response = await fetch(request);
+      if (response.ok) await cache.put(request, response.clone());
+      return response;
     }),
   );
 });

@@ -1,0 +1,193 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+
+test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ page }) => {
+  const consoleErrors: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+
+  await page.goto("/?e2e=accessibility");
+  await expect(page.getByRole("heading", { name: /Your park runs on this Chromebook/ })).toBeVisible();
+
+  const accessibility = await new AxeBuilder({ page }).analyze();
+  expect(accessibility.violations).toEqual([]);
+
+  const helpButton = page.getByRole("button", { name: "How to play" });
+  await helpButton.focus();
+  expect(await helpButton.evaluate((element) => element.matches(":focus-visible"))).toBe(true);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "From empty field to first ride" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toBeHidden();
+
+  await page.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 683, height: 384 });
+  const layout = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth);
+  await expect(page.getByRole("button", { name: "Remove game files" })).toBeAttached();
+  expect(consoleErrors).toEqual([]);
+});
+
+test("production-shaped shell boots Lite engine, persists a save, and reloads offline", async ({ context, page }) => {
+  const consoleErrors: string[] = [];
+  const failedRequests: string[] = [];
+  const requestOrigins = new Set<string>();
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+  page.on("requestfailed", (request) => failedRequests.push(`${request.url()}: ${request.failure()?.errorText ?? "unknown"}`));
+  page.on("request", (request) => requestOrigins.add(new URL(request.url()).origin));
+
+  const response = await page.request.get("/");
+  expect(response.status()).toBe(200);
+  expect(response.headers()["cross-origin-opener-policy"]).toBe("same-origin");
+  expect(response.headers()["cross-origin-embedder-policy"]).toBe("require-corp");
+  expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+
+  await page.goto("/?e2e=engine-first-load");
+  await page.evaluate(async () => navigator.serviceWorker.ready.then(() => true));
+  if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)))) {
+    await page.reload();
+  }
+  await expect(page.locator("#offline-status")).toContainText("Launcher ready");
+  await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  await page.getByRole("button", { name: /Open the park/ }).click();
+
+  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await expect(page.locator("#worker-value")).toHaveText("2");
+  await expect(page.locator("#storage-status")).toContainText(/MB of|GB of|Available|Persistent/);
+  await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
+  expect([...requestOrigins]).toEqual(["http://127.0.0.1:4173"]);
+  expect(consoleErrors).toEqual([]);
+
+  await page.evaluate(async () => {
+    const module = (window as unknown as {
+      __parkworksModule?: {
+        FS: {
+          writeFile(path: string, data: Uint8Array): void;
+          syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+        };
+      };
+    }).__parkworksModule;
+    if (!module) throw new Error("OpenRCT2 module was not exposed after initialization.");
+    module.FS.writeFile("/persistent/e2e-persistence.park", new Uint8Array([80, 65, 82, 75, 1, 2, 3, 4]));
+    await new Promise<void>((resolve, reject) => module.FS.syncfs(false, (error) => (error ? reject(error) : resolve())));
+  });
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export save backup" }).click();
+  const backupDownload = await downloadPromise;
+  expect(backupDownload.suggestedFilename()).toMatch(/^parkworks-saves-\d{4}-\d{2}-\d{2}\.zip$/);
+  const backupPath = await backupDownload.path();
+  if (!backupPath) throw new Error("Playwright could not retain the downloaded save backup.");
+
+  await page.reload();
+  await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  await page.getByRole("button", { name: /Open the park/ }).click();
+  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  const restoredSave = await page.evaluate(() => {
+    const module = (window as unknown as {
+      __parkworksModule?: {
+        FS: {
+          readFile(path: string): Uint8Array;
+          unlink(path: string): void;
+          syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+        };
+      };
+    }).__parkworksModule;
+    if (!module) throw new Error("OpenRCT2 module was not exposed after warm initialization.");
+    return [...module.FS.readFile("/persistent/e2e-persistence.park")];
+  });
+  expect(restoredSave).toEqual([80, 65, 82, 75, 1, 2, 3, 4]);
+
+  await page.getByRole("button", { name: "Erase local saves" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Erase local saves" }).click();
+  await expect(page.getByText("All local park saves were erased.")).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const module = (window as unknown as {
+        __parkworksModule: { FS: { analyzePath(path: string): { exists: boolean } } };
+      }).__parkworksModule;
+      return module.FS.analyzePath("/persistent/e2e-persistence.park").exists;
+    }),
+  ).toBe(false);
+
+  await page.locator("#backup-file-input").setInputFiles({
+    name: backupDownload.suggestedFilename(),
+    mimeType: "application/zip",
+    buffer: await readFile(backupPath),
+  });
+  await page.getByRole("dialog").getByRole("button", { name: "Verify and restore" }).click();
+  await expect(page.getByText(/Restored \d+ verified files/)).toBeVisible();
+  expect(
+    await page.evaluate(() => {
+      const module = (window as unknown as {
+        __parkworksModule: { FS: { readFile(path: string): Uint8Array } };
+      }).__parkworksModule;
+      return [...module.FS.readFile("/persistent/e2e-persistence.park")];
+    }),
+  ).toEqual([80, 65, 82, 75, 1, 2, 3, 4]);
+
+  await page.evaluate(async () => {
+    const module = (window as unknown as {
+      __parkworksModule: {
+        FS: {
+          unlink(path: string): void;
+          syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+        };
+      };
+    }).__parkworksModule;
+    module.FS.unlink("/persistent/e2e-persistence.park");
+    await new Promise<void>((resolve, reject) => module.FS.syncfs(false, (error) => (error ? reject(error) : resolve())));
+  });
+
+  const cacheSnapshot = await page.evaluate(async () => {
+    const cacheNames = await caches.keys();
+    const entries = await Promise.all(
+      cacheNames.map(async (cacheName) => {
+        const cache = await caches.open(cacheName);
+        return Promise.all(
+          (await cache.keys()).map(async (request) => {
+            const response = await cache.match(request);
+            return {
+              cacheName,
+              url: request.url,
+              status: response?.status ?? 0,
+              contentType: response?.headers.get("content-type") ?? "",
+            };
+          }),
+        );
+      }),
+    );
+    return {
+      controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+      entries: entries.flat(),
+    };
+  });
+  expect(cacheSnapshot.controller).toBe("http://127.0.0.1:4173/sw.js");
+  expect(cacheSnapshot.entries).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ url: expect.stringMatching(/\/assets\/.*\.js$/), status: 200 }),
+      expect.objectContaining({ url: expect.stringMatching(/\/assets\/.*\.css$/), status: 200 }),
+    ]),
+  );
+
+  await context.setOffline(true);
+  await page.reload({ timeout: 30_000, waitUntil: "domcontentloaded" });
+  const offlineState = await page.evaluate(async () => ({
+    controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+    cacheNames: await caches.keys(),
+    crossOriginIsolated,
+  }));
+  await expect(page.getByRole("heading", { name: /Your park runs on this Chromebook/ }), {
+    message: `Offline launcher failed. State: ${JSON.stringify(offlineState)} Cache: ${JSON.stringify(cacheSnapshot)} Console: ${consoleErrors.join(" | ")} Requests: ${failedRequests.join(" | ")}`,
+  }).toBeVisible();
+  await expect(page.locator("#network-indicator")).toContainText("Offline-ready");
+  await context.setOffline(false);
+});
