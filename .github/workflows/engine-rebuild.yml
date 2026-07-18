@@ -22,7 +22,7 @@ jobs:
 
       - name: Rebuild exact JS and WASM from pinned source
         shell: pwsh
-        run: ./scripts/rebuild-engine.ps1 -VerifyContract
+        run: ./scripts/rebuild-engine.ps1 -VerifyManifest
 
       - name: Install exact launcher dependencies
         run: npm ci
@@ -50,7 +50,10 @@ jobs:
           name: parkworks-engine-rebuild-${{ github.sha }}
           path: |
             .engine-rebuild/output/rebuild-metadata.json
+            .engine-rebuild/output/openrct2.js
+            .engine-rebuild/output/openrct2.wasm
             test-results/
             playwright-report/
           if-no-files-found: ignore
+          compression-level: 9
           retention-days: 90

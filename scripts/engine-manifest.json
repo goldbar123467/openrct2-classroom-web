@@ -10,11 +10,17 @@
     "initialMemoryPages": 8192,
     "maximumMemoryPages": 32768,
     "sharedMemory": true,
-    "pthreadPoolSize": 4
+    "pthreadPoolSize": 4,
+    "buildJobs": 1,
+    "emccCores": 1,
+    "linkerThreads": 1,
+    "ipoDisabled": true,
+    "hermeticContainerFilesystem": true
   },
   "modifications": [
     "Default WebAssembly initial memory reduced from 2048 MiB to 512 MiB.",
-    "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers."
+    "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers.",
+    "Interprocedural optimization disabled; Ninja compilation, Emscripten and Binaryen subprocesses, and wasm-ld pinned to one job on the immutable container filesystem for byte reproducibility."
   ],
   "files": {
     "public/engine/openrct2.js": {

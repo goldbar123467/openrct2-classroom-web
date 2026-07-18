@@ -51,45 +51,88 @@ Assert-ProjectPath $Staging "Engine staging directory"
 Assert-ProjectPath $Output "Engine output directory"
 if ($VerifyManifest -and $VerifyContract) { throw "Choose either -VerifyManifest or -VerifyContract, not both." }
 
-Remove-BuildDirectory $Source "Engine source directory"
-if (Test-Path -LiteralPath $Staging) { Remove-Item -LiteralPath $Staging -Recurse -Force }
-New-Item -ItemType Directory -Path $Source | Out-Null
-
-Invoke-Checked "Git initialization" { git -C $Source init --quiet }
-Invoke-Checked "Byte-preserving checkout configuration" { git -C $Source config core.autocrlf false }
-Invoke-Checked "Unix source line-ending configuration" { git -C $Source config core.eol lf }
-Invoke-Checked "Upstream remote configuration" { git -C $Source remote add origin https://github.com/OpenRCT2/OpenRCT2.git }
-Invoke-Checked "Exact upstream fetch" { git -C $Source fetch --quiet --filter=blob:none --depth=256 origin $Commit }
-Invoke-Checked "Upstream tags fetch" { git -C $Source fetch --quiet --filter=blob:none --tags origin }
-Invoke-Checked "Exact upstream checkout" { git -C $Source checkout --quiet --detach FETCH_HEAD }
-
-$ActualCommit = (git -C $Source rev-parse HEAD).Trim()
-if ($ActualCommit -ne $Commit) { throw "Expected OpenRCT2 $Commit but checked out $ActualCommit." }
-Invoke-Checked "Classroom patch preflight" { git -C $Source apply --unidiff-zero --check $Patch }
-Invoke-Checked "Classroom patch application" { git -C $Source apply --unidiff-zero $Patch }
-
-$BuildScript = Get-Content -LiteralPath (Join-Path $Source "scripts\build-emscripten") -Raw
-foreach ($Marker in @("MAXIMUM_MEMORY=2GB", "INITIAL_MEMORY=512MB", "PTHREAD_POOL_SIZE=4")) {
-    if (-not $BuildScript.Contains($Marker)) { throw "Patched build script is missing $Marker." }
-}
-$BuildScriptBytes = [System.IO.File]::ReadAllBytes((Join-Path $Source "scripts\build-emscripten"))
-if ($BuildScriptBytes -contains 13) { throw "Upstream Linux build script contains a carriage return; checkout normalization is unsafe." }
-
-Invoke-Checked "Pinned build image pull" { docker pull $Image }
-Invoke-Checked "Pinned OpenRCT2 Emscripten build" {
-    docker run --rm --volume "${Source}:/src" --workdir /src $Image bash -lc "bash scripts/build-emscripten"
-}
-
+Remove-BuildDirectory $Staging "Engine staging directory"
 New-Item -ItemType Directory -Force -Path $Output | Out-Null
-$BuiltDirectory = Join-Path $Source "build\www"
-Copy-Item -LiteralPath (Join-Path $BuiltDirectory "openrct2.js") -Destination (Join-Path $Output "openrct2.js") -Force
-Copy-Item -LiteralPath (Join-Path $BuiltDirectory "openrct2.wasm") -Destination (Join-Path $Output "openrct2.wasm") -Force
+
+# Build on the immutable container's own overlay filesystem. Previous parallel
+# runs produced different coupled JS/WASM pairs across hosts, so the build below
+# removes both the mutable host filesystem and scheduler concurrency variables.
+# Required Linux CI and local Docker now consume the same source bytes, paths,
+# tools, filesystem implementation, and one-job build order. Emscripten and
+# Binaryen have separate worker-pool controls, so both must be pinned.
+$ContainerName = "parkworks-engine-$PID-$([Guid]::NewGuid().ToString('N').Substring(0, 12))"
+$ContainerCreated = $false
+$BuildCommand = @'
+set -euo pipefail
+mkdir -p /src
+cd /src
+git init --quiet
+git config core.autocrlf false
+git config core.eol lf
+git remote add origin https://github.com/OpenRCT2/OpenRCT2.git
+git fetch --quiet --filter=blob:none --depth=256 origin __COMMIT__
+git fetch --quiet --filter=blob:none --tags origin
+git checkout --quiet --detach FETCH_HEAD
+test "$(git rev-parse HEAD)" = "__COMMIT__"
+git apply --unidiff-zero --check /tmp/engine-lite.patch
+git apply --unidiff-zero /tmp/engine-lite.patch
+grep -q 'MAXIMUM_MEMORY=2GB' scripts/build-emscripten
+grep -q 'INITIAL_MEMORY=512MB' scripts/build-emscripten
+grep -q 'PTHREAD_POOL_SIZE=4' scripts/build-emscripten
+grep -q 'DISABLE_IPO=ON' scripts/build-emscripten
+grep -q -- '-Wl,--threads=1' scripts/build-emscripten
+grep -q 'emmake ninja -j 1' scripts/build-emscripten
+if grep -q "$(printf '\r')" scripts/build-emscripten; then
+  echo 'Upstream Linux build script contains a carriage return; checkout normalization is unsafe.' >&2
+  exit 1
+fi
+export EMCC_CORES=1
+export BINARYEN_CORES=1
+bash scripts/build-emscripten
+'@.Replace("__COMMIT__", $Commit)
+$BuildCommand = $BuildCommand.Replace("`r`n", "`n") + "`n"
+$ContainerScript = Join-Path $Staging "container-build.sh"
+[System.IO.File]::WriteAllText($ContainerScript, $BuildCommand, [System.Text.UTF8Encoding]::new($false))
+$ContainerPatch = Join-Path $Staging "engine-lite.patch"
+$PatchText = [System.IO.File]::ReadAllText($Patch).Replace("`r`n", "`n")
+[System.IO.File]::WriteAllText($ContainerPatch, $PatchText, [System.Text.UTF8Encoding]::new($false))
+
+try {
+    Invoke-Checked "Pinned build image pull" { docker pull $Image }
+    Invoke-Checked "Hermetic build container creation" { docker create --name $ContainerName $Image bash /tmp/parkworks-build.sh }
+    $ContainerCreated = $true
+    Invoke-Checked "Hermetic build script transfer" { docker cp $ContainerScript "${ContainerName}:/tmp/parkworks-build.sh" }
+    Invoke-Checked "Classroom patch transfer" { docker cp $ContainerPatch "${ContainerName}:/tmp/engine-lite.patch" }
+    Invoke-Checked "Pinned OpenRCT2 Emscripten build" { docker start --attach $ContainerName }
+    foreach ($Name in @("openrct2.js", "openrct2.wasm")) {
+        Invoke-Checked "$Name extraction" {
+            docker cp "${ContainerName}:/src/build/www/$Name" (Join-Path $Output $Name)
+        }
+    }
+    if ($KeepSource) {
+        New-Item -ItemType Directory -Force -Path $Source | Out-Null
+        Invoke-Checked "Built source extraction" { docker cp "${ContainerName}:/src/." $Source }
+    }
+}
+finally {
+    if ($ContainerCreated) {
+        docker rm --force $ContainerName | Out-Null
+        if ($LASTEXITCODE -ne 0) { Write-Warning "Could not remove hermetic build container $ContainerName." }
+    }
+}
+
 Invoke-Checked "Deterministic JavaScript wrapper patch" { node (Join-Path $PSScriptRoot "patch-engine.mjs") $Output }
 
 $Metadata = [ordered]@{
     upstreamCommit = $Commit
     containerImage = $Image
     patch = "scripts/engine-lite.patch"
+    buildJobs = 1
+    emccCores = 1
+    binaryenCores = 1
+    linkerThreads = 1
+    ipoDisabled = $true
+    hermeticContainerFilesystem = $true
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
     files = [ordered]@{}
 }
@@ -107,10 +150,6 @@ if ($VerifyManifest) {
 }
 if ($VerifyContract) {
     Invoke-Checked "Rebuilt engine contract verification" { node (Join-Path $PSScriptRoot "verify-engine.mjs") $Output --skip-assets --contract-only }
-}
-
-if (-not $KeepSource) {
-    Remove-BuildDirectory $Source "Engine source directory"
 }
 
 Write-Output "Rebuilt OpenRCT2 $Commit with the pinned container. Output: $Output"

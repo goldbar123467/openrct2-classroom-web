@@ -20,6 +20,16 @@ The upstream `scripts/build-emscripten` link flags were changed as follows:
 + -s MAXIMUM_MEMORY=2GB -s INITIAL_MEMORY=512MB -s PTHREAD_POOL_SIZE=4
 ```
 
+Interprocedural optimization is disabled and the remaining compiler/linker schedulers are fixed so object and table ordering cannot vary with host CPU count:
+
+```diff
+- emmake ninja
++ emmake ninja -j 1
++ export EMCC_CORES=1
++ export BINARYEN_CORES=1
++ -DDISABLE_IPO=ON -Wl,--threads=1
+```
+
 The generated JS worker pool is then changed from a fixed compile-time value to:
 
 ```js
@@ -42,14 +52,14 @@ From the Parkworks repository root, run:
 ./scripts/rebuild-engine.ps1 -VerifyManifest
 ```
 
-The script initializes a clean source checkout with Unix line endings, fetches the exact commit and tags, applies `scripts/engine-lite.patch`, builds in the pinned container, patches only the generated-JS wrapper control, and parses the WASM memory import. `-VerifyManifest` performs a strict byte comparison when auditing the tracked release in the same build environment. The dedicated GitHub **Engine source rebuild** workflow uses `-VerifyContract`, records the newly generated hashes, builds the launcher around that matching JS/WASM pair, and boots it through the browser suite.
+The script copies an LF-only build script and patch into a disposable container, performs the exact source checkout and the entire compile on that container's own filesystem, disables IPO, fixes Ninja, Emscripten subprocesses, Binaryen optimization, and `wasm-ld` to one job, patches only the generated-JS wrapper control after extraction, and parses the WASM memory import. `-VerifyManifest` performs a strict byte comparison with the tracked release. The required GitHub **Engine source rebuild** workflow uses that strict mode, then builds the launcher around the freshly generated exact pair and boots it through the browser suite.
 
-Emscripten-generated JS/WASM is a coupled pair and can vary byte-for-byte between otherwise equivalent builds because build-time constant tables and optimization output are generated together. Therefore cross-host CI does not substitute a freshly built WASM under the tracked JS or claim a false bit-for-bit reproducibility guarantee. It proves the source, flags, memory import, wrapper limits, browser initialization, storage, recovery, update, and offline contracts; the normal Quality gate separately enforces the exact hashes of the deployed tracked pair.
+Emscripten-generated JS/WASM remains a coupled pair and must never be mixed across builds. Parkworks removes the observed host variation by pinning the source, container digest, container filesystem, paths, line endings, compiler scheduling, Binaryen scheduling, disabling IPO, and serializing the linker. A pull request now fails unless its clean required build reproduces both shipped hashes exactly; the normal Quality gate independently verifies those same tracked files before deployment.
 
 1. Clone the exact upstream commit with Unix line endings.
 2. Use the immutable container digest recorded above.
 3. Apply the build-flag diff above to upstream `scripts/build-emscripten`.
-4. Run `bash scripts/build-emscripten` inside the container.
+4. Run `bash scripts/build-emscripten` on the container filesystem with `DISABLE_IPO=ON`, `EMCC_CORES=1`, `BINARYEN_CORES=1`, `emmake ninja -j 1`, and `--threads=1`.
 5. Copy `build/www/openrct2.js` and `openrct2.wasm` into `public/engine/`.
 6. Run `node scripts/patch-engine.mjs`.
 7. Assemble `assets.zip` only from the open-source `data/` directory and changelog in the matching OpenRCT2 portable artifact.

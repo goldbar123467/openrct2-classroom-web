@@ -9,7 +9,7 @@ Every line must reference the exact Git commit and Vercel deployment. “Not obs
 | Engine | Version, commit, JS/WASM SHA-256, 512 MiB two-worker boot | Exact hashes and real Lite boot passed in Chromium |
 | Legal import | Approved licensed ZIP, local-only network trace, delete/re-import | Synthetic hostile/valid structures passed; approved licensed data still pending |
 | Gameplay | Scenario start, build/rotate/zoom/pause/speed/menu, objective progress | Pending licensed data |
-| Saves | Manual/autosave, reload, browser restart, reboot, app update | Real IDBFS synthetic `.park` reload and simulated service-worker cache upgrade passed; actual gameplay, ChromeOS reboot, and real-game save proof pending |
+| Saves | Manual/autosave, reload, browser restart, reboot, app update | Real IDBFS synthetic `.park` reload, full Chromium profile close/relaunch, cached offline engine restart, and simulated service-worker cache upgrade passed; actual gameplay, ChromeOS reboot, and real-game save proof pending |
 | Recovery | Export hashes, erase, restore, identical park/hash; corrupt ZIP rejection | Real browser UI export/erase/restore passed with exact synthetic bytes; corrupt/rollback corpus passed; real-park proof pending |
 | Performance | 3 runs: LCP, warm boot, FPS, 1% low, latency, memory, thermals | Pending weakest Chromebook |
 | Soak | Two 60-minute sessions on weakest device | Pending |
