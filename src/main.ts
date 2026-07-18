@@ -143,6 +143,7 @@ app.innerHTML = `
           <dl>
             <div><dt>RCT2 files</dt><dd id="asset-status">Not checked</dd></div>
             <div><dt>Browser storage</dt><dd id="storage-status">Checked when game opens</dd></div>
+            <div><dt>Offline cache</dt><dd id="offline-status">Preparing</dd></div>
             <div><dt>Engine</dt><dd>${ENGINE_VERSION}</dd></div>
           </dl>
           <div class="ledger-actions">
@@ -333,6 +334,7 @@ async function ensureEngine(): Promise<OpenRct2Module> {
       renderImportedState(hasRctData(module));
       await requestPersistentStorage();
       await updateStorageStatus();
+      await updateOfflineCacheStatus();
       progressDepot.hidden = true;
       playButton.disabled = false;
       return module;
@@ -562,10 +564,43 @@ window.addEventListener("online", renderNetworkState);
 window.addEventListener("offline", renderNetworkState);
 renderNetworkState();
 
+async function updateOfflineCacheStatus(): Promise<void> {
+  const offlineCopy = byId<HTMLElement>("offline-status");
+  if (!import.meta.env.PROD) {
+    offlineCopy.textContent = "Enabled in production";
+    return;
+  }
+  if (!("serviceWorker" in navigator) || !("caches" in window)) {
+    offlineCopy.textContent = "Unavailable in this browser";
+    return;
+  }
+  if (!navigator.serviceWorker.controller) {
+    offlineCopy.textContent = "Launcher ready after reload";
+    return;
+  }
+  const engineCached = await Promise.all([
+    caches.match("/engine/openrct2.js"),
+    caches.match("/engine/openrct2.wasm"),
+    caches.match("/engine/assets.zip"),
+  ]);
+  offlineCopy.textContent = engineCached.every(Boolean) ? "Launcher + engine ready" : "Launcher ready";
+}
+
 if (import.meta.env.PROD && "serviceWorker" in navigator && location.protocol === "https:") {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error: unknown) => console.warn("Offline cache unavailable", error));
+    void navigator.serviceWorker
+      .register("/sw.js", { scope: "/" })
+      .then(async () => {
+        await navigator.serviceWorker.ready;
+        await updateOfflineCacheStatus();
+      })
+      .catch((error: unknown) => {
+        byId<HTMLElement>("offline-status").textContent = "Unavailable";
+        console.warn("Offline cache unavailable", error);
+      });
   });
+} else {
+  void updateOfflineCacheStatus();
 }
 
 // Exposed only for the recovery controls in the teacher/admin runbook.
