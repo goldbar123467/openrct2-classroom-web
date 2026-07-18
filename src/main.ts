@@ -20,9 +20,11 @@ import {
 } from "./engine-utils";
 import {
   clearRctData,
+  hasSchoolScenarioPatch,
   hasRctData,
   importRctArchive,
   initializeOpenRct2,
+  installSchoolScenarioPatch,
   pathExists,
   startGame,
   type OpenRct2Module,
@@ -32,6 +34,8 @@ import {
 const BUILD_COMMIT = __BUILD_COMMIT__;
 const configuredSchoolAssetUrl = import.meta.env.VITE_SCHOOL_ASSET_URL?.trim() ?? "";
 const configuredSchoolAssetVersion = import.meta.env.VITE_SCHOOL_ASSET_VERSION?.trim() ?? "";
+const configuredSchoolScenarioPatchUrl = import.meta.env.VITE_SCHOOL_SCENARIO_PATCH_URL?.trim() ?? "";
+const configuredSchoolScenarioPatchVersion = import.meta.env.VITE_SCHOOL_SCENARIO_PATCH_VERSION?.trim() ?? "";
 
 function resolveSchoolAssetUrl(value: string): URL | null {
   if (!value) return null;
@@ -50,6 +54,7 @@ function resolveSchoolAssetUrl(value: string): URL | null {
 }
 
 const schoolAssetUrl = resolveSchoolAssetUrl(configuredSchoolAssetUrl);
+const schoolScenarioPatchUrl = resolveSchoolAssetUrl(configuredSchoolScenarioPatchUrl);
 
 interface NavigatorWithHints extends Navigator {
   deviceMemory?: number;
@@ -409,6 +414,23 @@ async function installSchoolArchive(module: OpenRct2Module): Promise<void> {
   }
 }
 
+async function installScenarioPatchIfNeeded(module: OpenRct2Module): Promise<void> {
+  if (!schoolScenarioPatchUrl || !configuredSchoolScenarioPatchVersion) return;
+  if (hasSchoolScenarioPatch(module, configuredSchoolScenarioPatchVersion)) return;
+
+  reportProgress({ phase: "game-assets", message: "Optimizing Magic Mountain for the browserâ€¦" });
+  const response = await fetch(schoolScenarioPatchUrl, {
+    cache: "no-store",
+    credentials: "same-origin",
+    redirect: "error",
+  });
+  if (!response.ok) {
+    throw new Error(`The browser-ready Magic Mountain park could not be downloaded (HTTP ${response.status}).`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  await installSchoolScenarioPatch(module, bytes, configuredSchoolScenarioPatchVersion);
+}
+
 async function updateStorageStatus(): Promise<void> {
   const status = await getStorageStatus();
   const storageCopy = byId<HTMLElement>("storage-status");
@@ -497,6 +519,7 @@ playButton.addEventListener("click", async () => {
       return;
     }
     reportProgress({ phase: "ready", message: "Opening your park…" });
+    await installScenarioPatchIfNeeded(module);
     openGameView();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await startGame(module);

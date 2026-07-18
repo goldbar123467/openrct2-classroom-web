@@ -4,9 +4,11 @@ import { MAX_RCT_ZIP_BYTES } from "../src/engine-utils";
 import {
   SCHOOL_SANDBOX_PLUGIN,
   clearRctData,
+  hasSchoolScenarioPatch,
   hasRctData,
   importRctArchive,
   installSchoolSandboxPlugin,
+  installSchoolScenarioPatch,
   walkFiles,
   type ProgressReporter,
 } from "../src/openrct2";
@@ -87,6 +89,21 @@ describe("licensed RCT2 archive transaction", () => {
 
     await installSchoolSandboxPlugin(module);
     expect(fs.syncCalls).toEqual([false]);
+  });
+
+  it("replaces the legacy Magic Mountain scenario with a versioned browser-ready park", async () => {
+    const module = createMemoryModule();
+    const fs = module.FS as MemoryFs;
+    fs.mkdir("/RCT/Scenarios");
+    fs.writeFile("/RCT/Scenarios/Six Flags Magic Mountain.SC6", new Uint8Array([1, 2, 3]));
+    const parkBytes = new Uint8Array([80, 65, 82, 75, ...new Array(20).fill(0)]);
+
+    await installSchoolScenarioPatch(module, parkBytes, "test-patch-v1");
+
+    expect(fs.analyzePath("/RCT/Scenarios/Six Flags Magic Mountain.SC6").exists).toBe(false);
+    expect(fs.readFile("/RCT/Scenarios/Six Flags Magic Mountain.park")).toEqual(parkBytes);
+    expect(hasSchoolScenarioPatch(module, "test-patch-v1")).toBe(true);
+    expect(hasSchoolScenarioPatch(module, "test-patch-v2")).toBe(false);
   });
 
   it("contains traversal-like names inside the private RCT mount", async () => {

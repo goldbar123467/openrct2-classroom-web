@@ -15,9 +15,11 @@ Set these public values only when building the launcher for the protected school
 ```text
 VITE_SCHOOL_ASSET_URL=/licensed/rct2-school-pack-<version>.zip
 VITE_SCHOOL_ASSET_VERSION=<version>
+VITE_SCHOOL_SCENARIO_PATCH_URL=/licensed/six-flags-magic-mountain-web-<version>.park
+VITE_SCHOOL_SCENARIO_PATCH_VERSION=<version>
 ```
 
-They identify a protected same-origin download and are not secrets. The launcher fetches and installs this package automatically when a student opens the park for the first time; students do not select or upload a ZIP. Passwords, storage credentials, hashes, and private server paths must never use `VITE_*` variables.
+They identify protected same-origin downloads and are not secrets. The launcher fetches and installs the package automatically when a student opens the park for the first time, then replaces the legacy Magic Mountain SC6 with the browser-ready `.park` conversion; students do not select or upload either file. Passwords, storage credentials, hashes, and private server paths must never use `VITE_*` variables.
 
 ## Launch
 

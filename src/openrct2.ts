@@ -15,6 +15,9 @@ const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-school4`;
 const ENGINE_ASSET_LIMIT = 250_000_000;
 const ENGINE_ASSET_ENTRY_LIMIT = 5_000;
 const SCHOOL_SANDBOX_PLUGIN_PATH = "/persistent/plugin/parkworks-school-sandbox.js";
+const SCHOOL_MAGIC_MOUNTAIN_SC6_PATH = "/RCT/Scenarios/Six Flags Magic Mountain.SC6";
+const SCHOOL_MAGIC_MOUNTAIN_PARK_PATH = "/RCT/Scenarios/Six Flags Magic Mountain.park";
+const SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER = "/RCT/.parkworks-magic-mountain-patch";
 
 export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxDelayTicks = -1;
 var schoolSandboxStep = 0;
@@ -568,6 +571,35 @@ export async function installSchoolSandboxPlugin(module: OpenRct2Module): Promis
     module.FS.writeFile(SCHOOL_SANDBOX_PLUGIN_PATH, SCHOOL_SANDBOX_PLUGIN);
     await syncFileSystem(module);
   }
+}
+
+export function hasSchoolScenarioPatch(module: OpenRct2Module, version: string): boolean {
+  if (!version || !pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PARK_PATH)) return false;
+  if (!pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER)) return false;
+  const marker = module.FS.readFile(SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER, { encoding: "utf8" });
+  return (typeof marker === "string" ? marker : new TextDecoder().decode(marker)) === version;
+}
+
+export async function installSchoolScenarioPatch(
+  module: OpenRct2Module,
+  bytes: Uint8Array,
+  version: string,
+): Promise<void> {
+  if (!version) throw new Error("The school scenario patch version is missing.");
+  if (bytes.byteLength < 16 || bytes.byteLength > 10_000_000) {
+    throw new Error("The school scenario patch has an invalid size.");
+  }
+  if (new TextDecoder().decode(bytes.subarray(0, 4)) !== "PARK") {
+    throw new Error("The school scenario patch is not an OpenRCT2 park file.");
+  }
+
+  ensureDirectory(module.FS, "/RCT/Scenarios");
+  module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_PARK_PATH, bytes);
+  if (pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_SC6_PATH)) {
+    module.FS.unlink(SCHOOL_MAGIC_MOUNTAIN_SC6_PATH);
+  }
+  module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER, version);
+  await syncFileSystem(module);
 }
 
 export async function clearRctData(module: OpenRct2Module): Promise<void> {

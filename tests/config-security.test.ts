@@ -59,7 +59,8 @@ describe("production security configuration", () => {
     expect(source).toContain('"--rct2-data-path=/RCT/"');
     expect(source).toContain("module.callMain([...GAME_STARTUP_ARGUMENTS])");
     expect(source).not.toContain("chooseStartupScenario");
-    expect(source).not.toContain('"/RCT/Scenarios"');
+    expect(source).toContain('"/RCT/Scenarios/Six Flags Magic Mountain.park"');
+    expect(source).not.toContain('GAME_STARTUP_ARGUMENTS, "/RCT/Scenarios');
   });
 
   it("installs the native school sandbox policy without embedding licensed assets", () => {

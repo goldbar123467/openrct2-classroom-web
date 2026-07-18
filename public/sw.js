@@ -1,4 +1,4 @@
-const CACHE_VERSION = "parkworks-v16-9de2d43fb6-school-sandbox-safe";
+const CACHE_VERSION = "parkworks-v17-9de2d43fb6-magic-mountain-park";
 const SHELL_URLS = ["/manifest.webmanifest", "/parkworks-icon.png"];
 
 async function installShell() {
