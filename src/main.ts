@@ -560,14 +560,31 @@ window.addEventListener("keydown", (event) => {
 });
 
 const networkIndicator = byId<HTMLElement>("network-indicator");
-function renderNetworkState(): void {
-  networkIndicator.classList.toggle("is-offline", !navigator.onLine);
+function renderNetworkState(isOnline: boolean): void {
+  networkIndicator.classList.toggle("is-offline", !isOnline);
   const label = networkIndicator.querySelector("span");
-  if (label) label.textContent = navigator.onLine ? "Online" : "Offline-ready";
+  if (label) label.textContent = isOnline ? "Online" : "Offline-ready";
 }
-window.addEventListener("online", renderNetworkState);
-window.addEventListener("offline", renderNetworkState);
-renderNetworkState();
+
+async function refreshNetworkState(): Promise<void> {
+  if (!navigator.onLine) {
+    renderNetworkState(false);
+    return;
+  }
+  try {
+    // A service worker can serve a cached navigation while Chromium still
+    // reports navigator.onLine=true. HEAD bypasses our GET-only worker so the
+    // label reflects actual origin connectivity instead of that browser hint.
+    const response = await fetch("/", { method: "HEAD", cache: "no-store" });
+    renderNetworkState(response.ok);
+  } catch {
+    renderNetworkState(false);
+  }
+}
+
+window.addEventListener("online", () => void refreshNetworkState());
+window.addEventListener("offline", () => renderNetworkState(false));
+void refreshNetworkState();
 
 async function updateOfflineCacheStatus(): Promise<void> {
   const offlineCopy = byId<HTMLElement>("offline-status");

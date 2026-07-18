@@ -1,6 +1,27 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+import { chromium, expect, test, type Page } from "@playwright/test";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+async function bootLiteEngineInPersistentProfile(page: Page, baseURL: string, marker: string) {
+  await page.goto(new URL(`/?e2e=${marker}`, baseURL).href);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          const registration = await navigator.serviceWorker.getRegistration();
+          return registration?.active?.state ?? registration?.installing?.state ?? registration?.waiting?.state ?? "missing";
+        }),
+      { timeout: 120_000, intervals: [250, 500, 1_000, 2_000] },
+    )
+    .toBe("activated");
+  if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)))) await page.reload();
+  await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
+  await page.getByRole("button", { name: /Open the park/ }).click();
+  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
+}
 
 test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ page }, testInfo) => {
   const consoleErrors: string[] = [];
@@ -313,4 +334,84 @@ test("an app-cache update preserves IDBFS saves and clears only the legacy relea
     await new Promise<void>((resolve, reject) => module.FS.syncfs(false, (error) => (error ? reject(error) : resolve())));
     localStorage.removeItem("parkworks-e2e-update-marker");
   });
+});
+
+test("a closed browser profile reopens its IDBFS save and boots the cached engine offline", async ({ baseURL }) => {
+  test.setTimeout(360_000);
+  if (!baseURL) throw new Error("Playwright baseURL is required for the persistent-profile flow.");
+  // Keep this path short: Chromium's CacheStorage descendants can exceed the
+  // legacy Windows path limit when nested under Playwright's long test slug.
+  const profileDirectory = await mkdtemp(join(tmpdir(), "parkworks-e2e-"));
+  const savePath = "/persistent/e2e-browser-restart.park";
+  const saveBytes = [80, 65, 82, 75, 82, 69, 83, 84, 65, 82, 84, 1, 2, 3];
+
+  try {
+    const firstContext = await chromium.launchPersistentContext(profileDirectory, {
+      headless: true,
+      locale: "en-US",
+      viewport: { width: 1366, height: 768 },
+    });
+    try {
+      const page = firstContext.pages()[0] ?? (await firstContext.newPage());
+      await bootLiteEngineInPersistentProfile(page, baseURL, "persistent-profile-first-process");
+      await page.evaluate(
+        async ({ path, bytes }) => {
+          const module = (window as unknown as {
+            __parkworksModule?: {
+              FS: {
+                writeFile(filePath: string, data: Uint8Array): void;
+                syncfs(populate: boolean, callback: (error?: unknown) => void): void;
+              };
+            };
+          }).__parkworksModule;
+          if (!module) throw new Error("OpenRCT2 module was not exposed in the first browser process.");
+          module.FS.writeFile(path, new Uint8Array(bytes));
+          await new Promise<void>((resolve, reject) =>
+            module.FS.syncfs(false, (error) => (error ? reject(error) : resolve())),
+          );
+        },
+        { path: savePath, bytes: saveBytes },
+      );
+    } finally {
+      await firstContext.close();
+    }
+
+    const secondContext = await chromium.launchPersistentContext(profileDirectory, {
+      headless: true,
+      locale: "en-US",
+      viewport: { width: 1366, height: 768 },
+    });
+    try {
+      const onlinePage = secondContext.pages()[0] ?? (await secondContext.newPage());
+      await bootLiteEngineInPersistentProfile(onlinePage, baseURL, "persistent-profile-second-process");
+      expect(
+        await onlinePage.evaluate((path) => {
+          const module = (window as unknown as {
+            __parkworksModule?: { FS: { readFile(filePath: string): Uint8Array } };
+          }).__parkworksModule;
+          if (!module) throw new Error("OpenRCT2 module was not exposed after browser relaunch.");
+          return [...module.FS.readFile(path)];
+        }, savePath),
+      ).toEqual(saveBytes);
+
+      await onlinePage.close();
+      await secondContext.setOffline(true);
+      const offlinePage = await secondContext.newPage();
+      await bootLiteEngineInPersistentProfile(offlinePage, baseURL, "persistent-profile-offline-engine");
+      await expect(offlinePage.locator("#network-indicator")).toContainText("Offline-ready");
+      expect(
+        await offlinePage.evaluate((path) => {
+          const module = (window as unknown as {
+            __parkworksModule?: { FS: { readFile(filePath: string): Uint8Array } };
+          }).__parkworksModule;
+          if (!module) throw new Error("Cached OpenRCT2 engine did not boot offline.");
+          return [...module.FS.readFile(path)];
+        }, savePath),
+      ).toEqual(saveBytes);
+    } finally {
+      await secondContext.close();
+    }
+  } finally {
+    await rm(profileDirectory, { recursive: true, force: true });
+  }
 });

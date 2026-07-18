@@ -12,7 +12,7 @@ Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engin
 | Cross-origin isolation headers | Local/Vercel config parity, response headers, `crossOriginIsolated` | Passed locally and live |
 | Custom OpenRCT2 engine | Pinned commit/container; clean source build verifies the WASM contract and boots its fresh JS/WASM pair | Passed |
 | 512 MiB / two-worker boot | Real WebAssembly initialization and 2,500+ open assets installed in browser | Passed on desktop Chromium |
-| Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, app-cache upgrade, and offline reload | Passed with synthetic `.park` bytes |
+| Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, app-cache upgrade, full Chromium close/relaunch, and cached offline engine restart | Passed with synthetic `.park` bytes |
 | No proprietary game data in deploy | CI archive/name scanner | Passed |
 | Real RCT2 asset import and gameplay | Requires a lawfully owned local installation | Awaiting licensed test data |
 | Lowest-spec managed Chromebook soak | Requires the district’s actual hardware | Not yet proven |
@@ -68,20 +68,20 @@ npm run verify:assets   # rejects proprietary RCT2 signatures in distributables
 npm test                # import/path/profile unit tests
 npm run build           # strict TypeScript + Vite production build
 npm run check           # all of the above
-npm run test:e2e        # accessibility, headers, real Lite boot, and offline reload
+npm run test:e2e        # accessibility, real Lite boot, IDBFS recovery, browser relaunch, and offline reload
 npm run verify:security # audit, current/history secret scan, licenses, and SBOM
 npm run evidence:dist   # deterministic SHA-256 manifest for every built file
 ```
 
 GitHub Actions runs these gates from `npm ci`, installs the pinned Playwright Chromium build, and uploads a commit-addressed CycloneDX SBOM, dependency-license report, engine manifest, and distribution hash manifest.
 
-The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit inside the immutable container digest in `scripts/engine-manifest.json`. It verifies the memory/worker contract, builds the launcher around that freshly generated matching JS/WASM pair, and boots it through all three browser flows. Run a strict local comparison with:
+The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit on the immutable container filesystem with a single pinned Ninja job. It must reproduce the exact shipped JS/WASM hashes in `scripts/engine-manifest.json`, then builds the launcher around that freshly generated pair and boots it through the browser suite. Run the same strict comparison locally with:
 
 ```powershell
 ./scripts/rebuild-engine.ps1 -VerifyManifest
 ```
 
-The **Production deployment gate** waits for the exact commit marker, rebuilds the release, compares all nine live files byte-for-byte, records a GitHub deployment, and reruns the three production browser flows. This workflow is intentionally distinct from the pre-merge quality gate.
+The **Production deployment gate** waits for the exact commit marker, rebuilds the release, compares all nine live files byte-for-byte, records a GitHub deployment, and reruns the four production browser flows. This workflow is intentionally distinct from the pre-merge quality gate.
 
 To run the identical browser suite against the public deployment instead of starting a local preview:
 
