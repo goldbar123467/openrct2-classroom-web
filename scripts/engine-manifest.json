@@ -20,7 +20,7 @@
   "modifications": [
     "Default WebAssembly initial memory reduced from 2048 MiB to 512 MiB.",
     "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers.",
-    "Interprocedural optimization disabled; Ninja compilation, Emscripten subprocesses, and wasm-ld pinned to one job on the immutable container filesystem for byte reproducibility."
+    "Interprocedural optimization disabled; Ninja compilation, Emscripten and Binaryen subprocesses, and wasm-ld pinned to one job on the immutable container filesystem for byte reproducibility."
   ],
   "files": {
     "public/engine/openrct2.js": {

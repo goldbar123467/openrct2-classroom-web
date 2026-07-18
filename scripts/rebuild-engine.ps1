@@ -58,7 +58,8 @@ New-Item -ItemType Directory -Force -Path $Output | Out-Null
 # runs produced different coupled JS/WASM pairs across hosts, so the build below
 # removes both the mutable host filesystem and scheduler concurrency variables.
 # Required Linux CI and local Docker now consume the same source bytes, paths,
-# tools, filesystem implementation, and one-job build order.
+# tools, filesystem implementation, and one-job build order. Emscripten and
+# Binaryen have separate worker-pool controls, so both must be pinned.
 $ContainerName = "parkworks-engine-$PID-$([Guid]::NewGuid().ToString('N').Substring(0, 12))"
 $ContainerCreated = $false
 $BuildCommand = @'
@@ -86,6 +87,7 @@ if grep -q "$(printf '\r')" scripts/build-emscripten; then
   exit 1
 fi
 export EMCC_CORES=1
+export BINARYEN_CORES=1
 bash scripts/build-emscripten
 '@.Replace("__COMMIT__", $Commit)
 $BuildCommand = $BuildCommand.Replace("`r`n", "`n") + "`n"
@@ -127,6 +129,7 @@ $Metadata = [ordered]@{
     patch = "scripts/engine-lite.patch"
     buildJobs = 1
     emccCores = 1
+    binaryenCores = 1
     linkerThreads = 1
     ipoDisabled = $true
     hermeticContainerFilesystem = $true
