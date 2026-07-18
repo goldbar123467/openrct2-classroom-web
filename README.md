@@ -10,9 +10,9 @@ Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engin
 | --- | --- | --- |
 | Production shell and 200% effective viewport | Playwright/axe, keyboard, forced colors, reduced motion, no overflow | Passed in Chromium |
 | Cross-origin isolation headers | Local/Vercel config parity, response headers, `crossOriginIsolated` | Passed locally and live |
-| Custom OpenRCT2 engine | Pinned commit `9de2d43fb6e7d6a6213336125a4afbddf8cc167c`; SHA-256 manifest | Passed |
+| Custom OpenRCT2 engine | Pinned commit and container; clean source rebuild reproduces the release JS/WASM hashes | Passed |
 | 512 MiB / two-worker boot | Real WebAssembly initialization and 2,500+ open assets installed in browser | Passed on desktop Chromium |
-| Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, and offline reload | Passed with synthetic `.park` bytes |
+| Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, app-cache upgrade, and offline reload | Passed with synthetic `.park` bytes |
 | No proprietary game data in deploy | CI archive/name scanner | Passed |
 | Real RCT2 asset import and gameplay | Requires a lawfully owned local installation | Awaiting licensed test data |
 | Lowest-spec managed Chromebook soak | Requires the district’s actual hardware | Not yet proven |
@@ -75,6 +75,14 @@ npm run evidence:dist   # deterministic SHA-256 manifest for every built file
 
 GitHub Actions runs these gates from `npm ci`, installs the pinned Playwright Chromium build, and uploads a commit-addressed CycloneDX SBOM, dependency-license report, engine manifest, and distribution hash manifest.
 
+The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit inside the immutable container digest in `scripts/engine-manifest.json`. It must reproduce the tracked JS/WASM hashes. Run the identical proof locally with:
+
+```powershell
+./scripts/rebuild-engine.ps1 -VerifyManifest
+```
+
+The **Production deployment gate** waits for the exact commit marker, rebuilds the release, compares all nine live files byte-for-byte, records a GitHub deployment, and reruns the three production browser flows. This workflow is intentionally distinct from the pre-merge quality gate.
+
 To run the identical browser suite against the public deployment instead of starting a local preview:
 
 ```powershell
@@ -97,6 +105,8 @@ Parkworks changes two Emscripten build settings and one generated-worker control
 
 The exact build flags, patch script, hashes, and upstream run are recorded in [docs/ENGINE_SOURCE.md](docs/ENGINE_SOURCE.md) and [scripts/engine-manifest.json](scripts/engine-manifest.json). The complete upstream source at the pinned commit plus this repository’s scripts are the Corresponding Source for the shipped object code.
 
+The corresponding-source package now includes the exact source patch, immutable build-container digest, automated clean rebuild, generated-wrapper patch, and machine-checked memory/import and file hashes. See [docs/ENGINE_SOURCE.md](docs/ENGINE_SOURCE.md).
+
 ## Deployment
 
 `vercel.json` supplies HTTPS production behavior, cross-origin isolation, a restrictive CSP, permissions policy, no-referrer, nosniff, and immutable caching for versioned engine assets. Deployment is static; no database or server credentials are required.
@@ -113,6 +123,7 @@ The same output also works on a school-controlled static server if it preserves 
 - [Threat model](docs/THREAT_MODEL.md)
 - [Accessibility statement](docs/ACCESSIBILITY.md)
 - [Verification matrix](docs/VERIFICATION.md)
+- [Release evidence records](docs/evidence/README.md)
 - [Security policy](SECURITY.md)
 
 ## Trademark

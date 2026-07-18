@@ -1,7 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const enginePath = resolve("public/engine/openrct2.js");
+const engineDirectory = resolve(process.argv[2] ?? "public/engine");
+const enginePath = resolve(engineDirectory, "openrct2.js");
 let source = await readFile(enginePath, "utf8");
 
 const workerNeedles = ["var pthreadPoolSize=120;", "var pthreadPoolSize=4;"];

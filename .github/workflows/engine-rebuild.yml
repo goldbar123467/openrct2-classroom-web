@@ -1,0 +1,33 @@
+name: Engine source rebuild
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+
+      - name: Rebuild exact JS and WASM from pinned source
+        shell: pwsh
+        run: ./scripts/rebuild-engine.ps1 -VerifyManifest
+
+      - name: Upload commit-addressed rebuild evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parkworks-engine-rebuild-${{ github.sha }}
+          path: .engine-rebuild/output/rebuild-metadata.json
+          if-no-files-found: error
+          retention-days: 90

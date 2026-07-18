@@ -1,0 +1,121 @@
+name: Production deployment gate
+
+on:
+  workflow_run:
+    workflows: ["Quality gate"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Exact 40-character main commit to verify; blank uses this workflow revision"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  deployments: write
+
+jobs:
+  verify-production:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_BASE_URL: https://openrct2-classroom-web.vercel.app
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || inputs.commit || github.sha }}
+      EXPECTED_BUILD_COMMIT: ${{ github.event.workflow_run.head_sha || inputs.commit || github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git ls-remote https://github.com/${GITHUB_REPOSITORY}.git "refs/heads/main" | grep -q "^${RELEASE_SHA}"
+
+      - name: Check out exact release source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Create pending GitHub production deployment
+        id: deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_id="$(jq -n \
+            --arg ref "$RELEASE_SHA" \
+            '{ref:$ref,auto_merge:false,required_contexts:[],environment:"production",description:"Parkworks exact-commit production verification",transient_environment:false,production_environment:true}' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/deployments" --input - --jq .id)"
+          echo "id=${deployment_id}" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --arg state "in_progress" \
+            --arg url "$PLAYWRIGHT_BASE_URL" \
+            '{state:$state,environment_url:$url,description:"Waiting for exact Vercel production commit"}' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" --input - >/dev/null
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Wait for exact production commit
+        run: node scripts/wait-for-production.mjs "$RELEASE_SHA" "$PLAYWRIGHT_BASE_URL"
+
+      - name: Rebuild and compare every live production byte
+        shell: bash
+        env:
+          GITHUB_SHA: ${{ env.RELEASE_SHA }}
+        run: |
+          set -euo pipefail
+          mkdir -p production-evidence
+          npm run build
+          node scripts/hash-dist.mjs > production-evidence/expected-dist-sha256.json
+          node scripts/verify-static-deployment.mjs production-evidence/expected-dist-sha256.json "$PLAYWRIGHT_BASE_URL" > production-evidence/live-probe.json
+
+      - name: Install pinned Chromium runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Probe production accessibility, engine, storage, update, recovery, and offline behavior
+        run: npm run test:e2e
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: parkworks-production-evidence-${{ env.RELEASE_SHA }}
+          path: |
+            playwright-report/
+            test-results/
+            production-evidence/
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Record final GitHub deployment status
+        if: always() && steps.deployment.outputs.id != ''
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+        run: |
+          set -euo pipefail
+          state="failure"
+          description="Production verification failed; do not promote"
+          if [[ "$JOB_STATUS" == "success" ]]; then
+            state="success"
+            description="Exact production commit passed the full browser gate"
+          fi
+          jq -n \
+            --arg state "$state" \
+            --arg url "$PLAYWRIGHT_BASE_URL" \
+            --arg log "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg description "$description" \
+            '{state:$state,environment_url:$url,log_url:$log,description:$description}' \
+            | gh api --method POST "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" --input - >/dev/null

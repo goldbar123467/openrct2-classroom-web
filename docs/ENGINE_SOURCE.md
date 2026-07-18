@@ -30,8 +30,22 @@ The wrapper chooses 2 workers for Classroom lite, 3 for Balanced, and 4 for Smoo
 
 ## Rebuild
 
+The automated rebuild uses the immutable container image:
+
+```text
+ghcr.io/openrct2/openrct2-build@sha256:0e1daa8e3f5a1c6951179aeab5c5de471ea705cb5f756bfb6e0ae5162b7e67be
+```
+
+From the Parkworks repository root, run:
+
+```powershell
+./scripts/rebuild-engine.ps1 -VerifyManifest
+```
+
+The script initializes a clean source checkout with Unix line endings, fetches the exact commit and tags, applies `scripts/engine-lite.patch`, builds in the pinned container, patches only the deterministic generated-JS wrapper control, parses the WASM memory import, and fails unless the rebuilt JS/WASM byte counts and SHA-256 hashes match the manifest. The dedicated GitHub **Engine source rebuild** workflow executes the same command and retains commit-addressed metadata.
+
 1. Clone the exact upstream commit with Unix line endings.
-2. Use `ghcr.io/openrct2/openrct2-build:26-emscripten`.
+2. Use the immutable container digest recorded above.
 3. Apply the build-flag diff above to upstream `scripts/build-emscripten`.
 4. Run `bash scripts/build-emscripten` inside the container.
 5. Copy `build/www/openrct2.js` and `openrct2.wasm` into `public/engine/`.
@@ -39,8 +53,16 @@ The wrapper chooses 2 workers for Classroom lite, 3 for Balanced, and 4 for Smoo
 7. Assemble `assets.zip` only from the open-source `data/` directory and changelog in the matching OpenRCT2 portable artifact.
 8. Update and verify `scripts/engine-manifest.json`.
 
-`scripts/sync-engine.ps1` automates artifact retrieval and open-asset assembly. A clean C++/Emscripten rebuild is required when changing the declared WebAssembly memory limits; patching only JavaScript is insufficient because the `.wasm` import declares its own minimum memory.
+`scripts/sync-engine.ps1` invokes the clean C++/Emscripten rebuild and then assembles the matching open assets. Patching only JavaScript is insufficient because the `.wasm` import declares its own minimum memory.
 
 ## Shipped hashes
+
+`scripts/sync-engine.ps1` now calls the clean source rebuild before retrieving and assembling matching open assets. It no longer substitutes an upstream 2 GiB/120-worker WASM and patches only JavaScript.
+
+On 2026-07-18, a clean local run compiled 693 targets and reproduced:
+
+- `openrct2.js`: `4241cc8f2fe41adf049824a7e58959bb9a3c1305af2479f7861d8673ab9948d4`
+- `openrct2.wasm`: `bde90a0e5ba3041c6235e64d038d5dd808995401f383e6d79890b9cfcd9c3467`
+- WASM memory import: shared, 8192 initial pages (512 MiB), 32768 maximum pages (2 GiB)
 
 The authoritative byte sizes and SHA-256 hashes are machine-readable in `scripts/engine-manifest.json` and are checked during every production build.

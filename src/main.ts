@@ -31,6 +31,8 @@ import {
   type ProgressUpdate,
 } from "./openrct2";
 
+const BUILD_COMMIT = __BUILD_COMMIT__;
+
 interface NavigatorWithHints extends Navigator {
   deviceMemory?: number;
   connection?: { saveData?: boolean; effectiveType?: string };
@@ -165,6 +167,7 @@ app.innerHTML = `
     <footer class="site-footer">
       <span>OpenRCT2 ${ENGINE_VERSION} · source ${ENGINE_COMMIT.slice(0, 10)}</span>
       <span>Unofficial classroom project · RollerCoaster Tycoon is a trademark of its owner</span>
+      <span>Site build ${BUILD_COMMIT.slice(0, 10)}</span>
     </footer>
   </div>
 

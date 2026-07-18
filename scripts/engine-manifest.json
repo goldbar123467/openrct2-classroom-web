@@ -4,6 +4,14 @@
   "upstreamCommit": "9de2d43fb6e7d6a6213336125a4afbddf8cc167c",
   "githubActionsRun": "29610479932",
   "retrievedAt": "2026-07-17T20:28:36Z",
+  "sourceBuild": {
+    "containerImage": "ghcr.io/openrct2/openrct2-build@sha256:0e1daa8e3f5a1c6951179aeab5c5de471ea705cb5f756bfb6e0ae5162b7e67be",
+    "patch": "scripts/engine-lite.patch",
+    "initialMemoryPages": 8192,
+    "maximumMemoryPages": 32768,
+    "sharedMemory": true,
+    "pthreadPoolSize": 4
+  },
   "modifications": [
     "Default WebAssembly initial memory reduced from 2048 MiB to 512 MiB.",
     "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers."
