@@ -88,7 +88,6 @@ describe("production security configuration", () => {
     const launcher = readFileSync("src/main.ts", "utf8");
     const styles = readFileSync("src/style.css", "utf8");
     expect(source).toContain("module.canvas.getBoundingClientRect()");
-    expect(source).toContain('upsertGeneralSetting(configured, "drawing_engine", "SOFTWARE")');
     expect(source).toContain('upsertGeneralSetting(configured, "window_width", String(viewport.width))');
     expect(source).toContain('upsertGeneralSetting(configured, "window_height", String(viewport.height))');
     expect(source).toContain("module.canvas.width = viewport.width");

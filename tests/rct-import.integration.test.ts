@@ -102,6 +102,7 @@ describe("licensed RCT2 archive transaction", () => {
 
     expect(fs.analyzePath("/RCT/Scenarios/Six Flags Magic Mountain.SC6").exists).toBe(false);
     expect(fs.readFile("/RCT/Scenarios/Six Flags Magic Mountain.park")).toEqual(parkBytes);
+    expect(fs.readFile("/persistent/save/Six Flags Magic Mountain Browser Sandbox.park")).toEqual(parkBytes);
     expect(hasSchoolScenarioPatch(module, "test-patch-v1")).toBe(true);
     expect(hasSchoolScenarioPatch(module, "test-patch-v2")).toBe(false);
   });

@@ -17,6 +17,7 @@ const ENGINE_ASSET_ENTRY_LIMIT = 5_000;
 const SCHOOL_SANDBOX_PLUGIN_PATH = "/persistent/plugin/parkworks-school-sandbox.js";
 const SCHOOL_MAGIC_MOUNTAIN_SC6_PATH = "/RCT/Scenarios/Six Flags Magic Mountain.SC6";
 const SCHOOL_MAGIC_MOUNTAIN_PARK_PATH = "/RCT/Scenarios/Six Flags Magic Mountain.park";
+const SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH = "/persistent/save/Six Flags Magic Mountain Browser Sandbox.park";
 const SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER = "/RCT/.parkworks-magic-mountain-patch";
 
 export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxDelayTicks = -1;
@@ -552,7 +553,6 @@ async function prepareBrowserStartupConfig(
     : "";
   const source = typeof existing === "string" ? existing : new TextDecoder().decode(existing);
   let configured = upsertGeneralSetting(source, "infer_display_dpi", "false");
-  configured = upsertGeneralSetting(configured, "drawing_engine", "SOFTWARE");
   configured = upsertGeneralSetting(configured, "window_scale", "1.000000");
   configured = upsertGeneralSetting(configured, "window_width", String(viewport.width));
   configured = upsertGeneralSetting(configured, "window_height", String(viewport.height));
@@ -576,6 +576,7 @@ export async function installSchoolSandboxPlugin(module: OpenRct2Module): Promis
 
 export function hasSchoolScenarioPatch(module: OpenRct2Module, version: string): boolean {
   if (!version || !pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PARK_PATH)) return false;
+  if (!pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH)) return false;
   if (!pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER)) return false;
   const marker = module.FS.readFile(SCHOOL_MAGIC_MOUNTAIN_PATCH_MARKER, { encoding: "utf8" });
   return (typeof marker === "string" ? marker : new TextDecoder().decode(marker)) === version;
@@ -595,7 +596,9 @@ export async function installSchoolScenarioPatch(
   }
 
   ensureDirectory(module.FS, "/RCT/Scenarios");
+  ensureDirectory(module.FS, "/persistent/save");
   module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_PARK_PATH, bytes);
+  module.FS.writeFile(SCHOOL_MAGIC_MOUNTAIN_SAVE_PATH, bytes);
   if (pathExists(module.FS, SCHOOL_MAGIC_MOUNTAIN_SC6_PATH)) {
     module.FS.unlink(SCHOOL_MAGIC_MOUNTAIN_SC6_PATH);
   }

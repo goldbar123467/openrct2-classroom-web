@@ -19,7 +19,7 @@ VITE_SCHOOL_SCENARIO_PATCH_URL=/licensed/six-flags-magic-mountain-web-<version>.
 VITE_SCHOOL_SCENARIO_PATCH_VERSION=<version>
 ```
 
-They identify protected same-origin downloads and are not secrets. The launcher fetches and installs the package automatically when a student opens the park for the first time, then replaces the legacy Magic Mountain SC6 with the browser-ready `.park` conversion; students do not select or upload either file. Passwords, storage credentials, hashes, and private server paths must never use `VITE_*` variables.
+They identify protected same-origin downloads and are not secrets. The launcher fetches and installs the package automatically when a student opens the park for the first time, then replaces the legacy Magic Mountain SC6 with a paused browser-ready `.park` snapshot in both the scenario and saved-game folders; students do not select or upload either file. Passwords, storage credentials, hashes, and private server paths must never use `VITE_*` variables.
 
 ## Launch
 
