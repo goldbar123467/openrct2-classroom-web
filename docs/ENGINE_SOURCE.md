@@ -20,11 +20,13 @@ The upstream `scripts/build-emscripten` link flags were changed as follows:
 + -s MAXIMUM_MEMORY=2GB -s INITIAL_MEMORY=512MB -s PTHREAD_POOL_SIZE=4
 ```
 
-The build scheduler is also fixed so object-generation order cannot vary with host CPU count:
+The compiler and linker schedulers are also fixed so object generation and ThinLTO cannot vary with host CPU count:
 
 ```diff
 - emmake ninja
 + emmake ninja -j 1
++ export EMCC_CORES=1
++ -Wl,--threads=1 -Wl,--thinlto-jobs=1
 ```
 
 The generated JS worker pool is then changed from a fixed compile-time value to:
@@ -49,14 +51,14 @@ From the Parkworks repository root, run:
 ./scripts/rebuild-engine.ps1 -VerifyManifest
 ```
 
-The script copies an LF-only build script and patch into a disposable container, performs the exact source checkout and the entire compile on that container's own filesystem, fixes Ninja to one job, patches only the generated-JS wrapper control after extraction, and parses the WASM memory import. `-VerifyManifest` performs a strict byte comparison with the tracked release. The required GitHub **Engine source rebuild** workflow uses that strict mode, then builds the launcher around the freshly generated exact pair and boots it through the browser suite.
+The script copies an LF-only build script and patch into a disposable container, performs the exact source checkout and the entire compile on that container's own filesystem, fixes Ninja, Emscripten subprocesses, `wasm-ld`, and ThinLTO to one job, patches only the generated-JS wrapper control after extraction, and parses the WASM memory import. `-VerifyManifest` performs a strict byte comparison with the tracked release. The required GitHub **Engine source rebuild** workflow uses that strict mode, then builds the launcher around the freshly generated exact pair and boots it through the browser suite.
 
-Emscripten-generated JS/WASM remains a coupled pair and must never be mixed across builds. Parkworks removes the observed host variation by pinning the source, container digest, container filesystem, paths, line endings, and single-job scheduler. A pull request now fails unless its clean required build reproduces both shipped hashes exactly; the normal Quality gate independently verifies those same tracked files before deployment.
+Emscripten-generated JS/WASM remains a coupled pair and must never be mixed across builds. Parkworks removes the observed host variation by pinning the source, container digest, container filesystem, paths, line endings, compiler scheduling, and ThinLTO/linker scheduling. A pull request now fails unless its clean required build reproduces both shipped hashes exactly; the normal Quality gate independently verifies those same tracked files before deployment.
 
 1. Clone the exact upstream commit with Unix line endings.
 2. Use the immutable container digest recorded above.
 3. Apply the build-flag diff above to upstream `scripts/build-emscripten`.
-4. Run `bash scripts/build-emscripten` on the container filesystem with `emmake ninja -j 1`.
+4. Run `bash scripts/build-emscripten` on the container filesystem with `EMCC_CORES=1`, `emmake ninja -j 1`, `--threads=1`, and `--thinlto-jobs=1`.
 5. Copy `build/www/openrct2.js` and `openrct2.wasm` into `public/engine/`.
 6. Run `node scripts/patch-engine.mjs`.
 7. Assemble `assets.zip` only from the open-source `data/` directory and changelog in the matching OpenRCT2 portable artifact.
