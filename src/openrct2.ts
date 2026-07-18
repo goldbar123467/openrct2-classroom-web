@@ -552,6 +552,7 @@ async function prepareBrowserStartupConfig(
     : "";
   const source = typeof existing === "string" ? existing : new TextDecoder().decode(existing);
   let configured = upsertGeneralSetting(source, "infer_display_dpi", "false");
+  configured = upsertGeneralSetting(configured, "drawing_engine", "SOFTWARE");
   configured = upsertGeneralSetting(configured, "window_scale", "1.000000");
   configured = upsertGeneralSetting(configured, "window_width", String(viewport.width));
   configured = upsertGeneralSetting(configured, "window_height", String(viewport.height));
