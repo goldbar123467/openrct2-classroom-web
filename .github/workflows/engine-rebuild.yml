@@ -22,12 +22,35 @@ jobs:
 
       - name: Rebuild exact JS and WASM from pinned source
         shell: pwsh
-        run: ./scripts/rebuild-engine.ps1 -VerifyManifest
+        run: ./scripts/rebuild-engine.ps1 -VerifyContract
+
+      - name: Install exact launcher dependencies
+        run: npm ci
+
+      - name: Build launcher around the freshly compiled engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .engine-rebuild/output/openrct2.js public/engine/openrct2.js
+          cp .engine-rebuild/output/openrct2.wasm public/engine/openrct2.wasm
+          npm run verify:assets
+          npx tsc --noEmit
+          npx vite build
+
+      - name: Install pinned Chromium runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Boot and exercise the freshly compiled engine
+        run: npm run test:e2e
 
       - name: Upload commit-addressed rebuild evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: parkworks-engine-rebuild-${{ github.sha }}
-          path: .engine-rebuild/output/rebuild-metadata.json
-          if-no-files-found: error
+          path: |
+            .engine-rebuild/output/rebuild-metadata.json
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
           retention-days: 90

@@ -1,6 +1,7 @@
 param(
     [string]$OutputDirectory = ".engine-rebuild\output",
     [switch]$VerifyManifest,
+    [switch]$VerifyContract,
     [switch]$KeepSource
 )
 
@@ -27,6 +28,7 @@ function Invoke-Checked([string]$Label, [scriptblock]$Command) {
 
 Assert-ProjectPath $Staging "Engine staging directory"
 Assert-ProjectPath $Output "Engine output directory"
+if ($VerifyManifest -and $VerifyContract) { throw "Choose either -VerifyManifest or -VerifyContract, not both." }
 
 if (Test-Path -LiteralPath $Staging) {
     Remove-Item -LiteralPath $Staging -Recurse -Force
@@ -82,6 +84,9 @@ $Metadata | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $Outpu
 
 if ($VerifyManifest) {
     Invoke-Checked "Rebuilt engine manifest comparison" { node (Join-Path $PSScriptRoot "verify-engine.mjs") $Output --skip-assets }
+}
+if ($VerifyContract) {
+    Invoke-Checked "Rebuilt engine contract verification" { node (Join-Path $PSScriptRoot "verify-engine.mjs") $Output --skip-assets --contract-only }
 }
 
 if (-not $KeepSource) {

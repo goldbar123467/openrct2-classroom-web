@@ -5,9 +5,11 @@ import { basename, resolve } from "node:path";
 const manifest = JSON.parse(await readFile(resolve("scripts/engine-manifest.json"), "utf8"));
 const engineDirectory = process.argv[2] && !process.argv[2].startsWith("--") ? resolve(process.argv[2]) : null;
 const skipAssets = process.argv.includes("--skip-assets");
+const contractOnly = process.argv.includes("--contract-only");
 let failed = false;
 
 for (const [relativePath, expected] of Object.entries(manifest.files)) {
+  if (contractOnly) continue;
   if (skipAssets && relativePath.endsWith("assets.zip")) continue;
   const absolutePath = engineDirectory ? resolve(engineDirectory, basename(relativePath)) : resolve(relativePath);
   const bytes = await readFile(absolutePath);
@@ -110,5 +112,5 @@ if (
 
 if (failed) process.exit(1);
 console.log(
-  `Verified OpenRCT2 ${manifest.engineVersion} from ${manifest.upstreamCommit} with shared ${expectedBuild.initialMemoryPages}/${expectedBuild.maximumMemoryPages}-page memory.`,
+  `Verified OpenRCT2 ${manifest.engineVersion} from ${manifest.upstreamCommit} with shared ${expectedBuild.initialMemoryPages}/${expectedBuild.maximumMemoryPages}-page memory${contractOnly ? " (source-build contract)" : " and tracked release hashes"}.`,
 );

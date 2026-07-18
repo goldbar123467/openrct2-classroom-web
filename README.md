@@ -10,7 +10,7 @@ Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engin
 | --- | --- | --- |
 | Production shell and 200% effective viewport | Playwright/axe, keyboard, forced colors, reduced motion, no overflow | Passed in Chromium |
 | Cross-origin isolation headers | Local/Vercel config parity, response headers, `crossOriginIsolated` | Passed locally and live |
-| Custom OpenRCT2 engine | Pinned commit and container; clean source rebuild reproduces the release JS/WASM hashes | Passed |
+| Custom OpenRCT2 engine | Pinned commit/container; clean source build verifies the WASM contract and boots its fresh JS/WASM pair | Passed |
 | 512 MiB / two-worker boot | Real WebAssembly initialization and 2,500+ open assets installed in browser | Passed on desktop Chromium |
 | Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, app-cache upgrade, and offline reload | Passed with synthetic `.park` bytes |
 | No proprietary game data in deploy | CI archive/name scanner | Passed |
@@ -75,7 +75,7 @@ npm run evidence:dist   # deterministic SHA-256 manifest for every built file
 
 GitHub Actions runs these gates from `npm ci`, installs the pinned Playwright Chromium build, and uploads a commit-addressed CycloneDX SBOM, dependency-license report, engine manifest, and distribution hash manifest.
 
-The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit inside the immutable container digest in `scripts/engine-manifest.json`. It must reproduce the tracked JS/WASM hashes. Run the identical proof locally with:
+The separate **Engine source rebuild** workflow compiles all OpenRCT2 C++ targets from the exact upstream commit inside the immutable container digest in `scripts/engine-manifest.json`. It verifies the memory/worker contract, builds the launcher around that freshly generated matching JS/WASM pair, and boots it through all three browser flows. Run a strict local comparison with:
 
 ```powershell
 ./scripts/rebuild-engine.ps1 -VerifyManifest

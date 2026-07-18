@@ -16,7 +16,7 @@ Every line must reference the exact Git commit and Vercel deployment. “Not obs
 | Accessibility | axe, keyboard, 200%, forced colors, reduced motion, screen reader | Automated wrapper gates passed with zero axe violations; manual screen-reader pass pending |
 | Security | no-third-party HAR, CSP/header scan, ZIP corpus, dependency/secret scan | Same-origin browser trace, header parity, ZIP corpus, audit, history secret scan, licenses, and SBOM passed locally |
 | Git/Vercel | public repo, Git connection, preview promotion, production URL, rollback | Public repo and production URL live; exact-commit post-deploy workflow implemented; automatic Vercel Git link still requires an authenticated dashboard session |
-| GPL | exact source, build recipe, license/notices, source link | Clean pinned-container source rebuild reproduces exact JS/WASM hashes and parses memory limits |
+| GPL | exact source, build recipe, license/notices, source link | Clean pinned-container source build verifies memory/worker contracts and boots its freshly generated JS/WASM pair; tracked release hashes are gated separately |
 | Handoff | teacher/admin/student docs and clean-clone rehearsal | Docs implemented; second-person rehearsal pending |
 
 ## Provisional performance targets

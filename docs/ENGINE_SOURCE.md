@@ -42,7 +42,9 @@ From the Parkworks repository root, run:
 ./scripts/rebuild-engine.ps1 -VerifyManifest
 ```
 
-The script initializes a clean source checkout with Unix line endings, fetches the exact commit and tags, applies `scripts/engine-lite.patch`, builds in the pinned container, patches only the deterministic generated-JS wrapper control, parses the WASM memory import, and fails unless the rebuilt JS/WASM byte counts and SHA-256 hashes match the manifest. The dedicated GitHub **Engine source rebuild** workflow executes the same command and retains commit-addressed metadata.
+The script initializes a clean source checkout with Unix line endings, fetches the exact commit and tags, applies `scripts/engine-lite.patch`, builds in the pinned container, patches only the generated-JS wrapper control, and parses the WASM memory import. `-VerifyManifest` performs a strict byte comparison when auditing the tracked release in the same build environment. The dedicated GitHub **Engine source rebuild** workflow uses `-VerifyContract`, records the newly generated hashes, builds the launcher around that matching JS/WASM pair, and boots it through the browser suite.
+
+Emscripten-generated JS/WASM is a coupled pair and can vary byte-for-byte between otherwise equivalent builds because build-time constant tables and optimization output are generated together. Therefore cross-host CI does not substitute a freshly built WASM under the tracked JS or claim a false bit-for-bit reproducibility guarantee. It proves the source, flags, memory import, wrapper limits, browser initialization, storage, recovery, update, and offline contracts; the normal Quality gate separately enforces the exact hashes of the deployed tracked pair.
 
 1. Clone the exact upstream commit with Unix line endings.
 2. Use the immutable container digest recorded above.
@@ -59,7 +61,7 @@ The script initializes a clean source checkout with Unix line endings, fetches t
 
 `scripts/sync-engine.ps1` now calls the clean source rebuild before retrieving and assembling matching open assets. It no longer substitutes an upstream 2 GiB/120-worker WASM and patches only JavaScript.
 
-On 2026-07-18, a clean local run compiled 693 targets and reproduced:
+On 2026-07-18, a clean local run compiled 693 targets and matched the tracked release:
 
 - `openrct2.js`: `4241cc8f2fe41adf049824a7e58959bb9a3c1305af2479f7861d8673ab9948d4`
 - `openrct2.wasm`: `bde90a0e5ba3041c6235e64d038d5dd808995401f383e6d79890b9cfcd9c3467`
