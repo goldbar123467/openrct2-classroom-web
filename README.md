@@ -75,6 +75,16 @@ npm run evidence:dist   # deterministic SHA-256 manifest for every built file
 
 GitHub Actions runs these gates from `npm ci`, installs the pinned Playwright Chromium build, and uploads a commit-addressed CycloneDX SBOM, dependency-license report, engine manifest, and distribution hash manifest.
 
+To run the identical browser suite against the public deployment instead of starting a local preview:
+
+```powershell
+$env:PLAYWRIGHT_BASE_URL = "https://openrct2-classroom-web.vercel.app"
+npm run test:e2e
+Remove-Item Env:PLAYWRIGHT_BASE_URL
+```
+
+External probes require HTTPS. Production source maps are not emitted; release evidence hashes only publicly served runtime files.
+
 ## Engine provenance and GPL source
 
 The shipped engine is derived from OpenRCT2 commit [`9de2d43fb6e7d6a6213336125a4afbddf8cc167c`](https://github.com/OpenRCT2/OpenRCT2/tree/9de2d43fb6e7d6a6213336125a4afbddf8cc167c), GPLv3.
