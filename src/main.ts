@@ -579,9 +579,9 @@ async function updateOfflineCacheStatus(): Promise<void> {
     return;
   }
   const engineCached = await Promise.all([
-    caches.match("/engine/openrct2.js"),
-    caches.match("/engine/openrct2.wasm"),
-    caches.match("/engine/assets.zip"),
+    caches.match("/engine/openrct2.js", { ignoreSearch: true }),
+    caches.match("/engine/openrct2.wasm", { ignoreSearch: true }),
+    caches.match("/engine/assets.zip", { ignoreSearch: true }),
   ]);
   offlineCopy.textContent = engineCached.every(Boolean) ? "Launcher + engine ready" : "Launcher ready";
 }
