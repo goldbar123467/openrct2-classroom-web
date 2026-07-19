@@ -38,6 +38,10 @@ Math.min(4, Math.max(1, Number(Module["PTHREAD_POOL_SIZE"]) || 2))
 
 The wrapper chooses 2 workers for Classroom lite, 3 for Balanced, and 4 for Smooth. The build disables network, HTTP, OpenGL, TTF, FLAC, and Discord RPC, matching the upstream browser build’s privacy-oriented feature set.
 
+The source patch also keeps native builds on the upstream background preloader while browser builds initialize repositories synchronously and switch to the requested startup scene before the Emscripten main loop begins. This avoids an indefinitely rendering-inhibited preloader after its worker finishes in Chrome.
+
+For the protected school build, the native title-menu scenario callback derives the selected SC6 basename and opens the exact matching `/RCT/ParkworksLibrary/<basename>.park` snapshot. When the verified library marker exists, a missing or unreadable snapshot produces a native error and returns without falling back to the legacy scenario-start path. Builds without a school-library marker retain upstream behavior.
+
 ## Rebuild
 
 The automated rebuild uses the immutable container image:
@@ -71,10 +75,10 @@ Emscripten-generated JS/WASM remains a coupled pair and must never be mixed acro
 
 `scripts/sync-engine.ps1` now calls the clean source rebuild before retrieving and assembling matching open assets. It no longer substitutes an upstream 2 GiB/120-worker WASM and patches only JavaScript.
 
-On 2026-07-18, a clean local run compiled 693 targets and matched the tracked release:
+On 2026-07-19, a clean local run compiled 693 targets with the browser preloader, resize, hardware-display, and native school-library callback fixes:
 
-- `openrct2.js`: `4241cc8f2fe41adf049824a7e58959bb9a3c1305af2479f7861d8673ab9948d4`
-- `openrct2.wasm`: `bde90a0e5ba3041c6235e64d038d5dd808995401f383e6d79890b9cfcd9c3467`
+- `openrct2.js`: `b583dcb2fb11eed0c92a6a0c2e258088a5d1c10eda9b64f20e93b86c7169a765`
+- `openrct2.wasm`: `2bef95f4756539ba4408abd1cfdd545f1c8bfe3e29e04e609b8b03ddb61a4a83`
 - WASM memory import: shared, 8192 initial pages (512 MiB), 32768 maximum pages (2 GiB)
 
 The authoritative byte sizes and SHA-256 hashes are machine-readable in `scripts/engine-manifest.json` and are checked during every production build.

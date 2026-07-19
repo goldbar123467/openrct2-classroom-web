@@ -2,7 +2,7 @@
 
 Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engine. It provides a fast student setup screen, a two-worker low-memory mode, device-local RCT2 data, IndexedDB-backed saves, checksum-verified save backups, offline caching, and Vercel-ready security headers.
 
-> **Important:** OpenRCT2 is free software, but it still requires files from a legally owned copy of RollerCoaster Tycoon 2 or RollerCoaster Tycoon Classic. This repository does not contain, upload, or serve those proprietary files. A district should confirm its classroom licensing rights before rollout; do not assume one personal copy covers a class.
+> **Important:** OpenRCT2 still requires RCT2 or RCT Classic game files. They are never committed to this repository or included in the public static/Vercel build. The school deployment mounts its human-authorized package separately and serves it only behind the password gate with private, no-store caching.
 
 ## Current verification status
 
@@ -14,33 +14,34 @@ Parkworks is a Chromebook-first launcher for the real OpenRCT2 WebAssembly engin
 | 512 MiB / two-worker boot | Real WebAssembly initialization and 2,500+ open assets installed in browser | Passed on desktop Chromium |
 | Local save persistence and recovery | Real IDBFS reload plus UI export, erase, checksum restore, app-cache upgrade, full Chromium close/relaunch, and cached offline engine restart | Passed with synthetic `.park` bytes |
 | No proprietary game data in deploy | CI archive/name scanner | Passed |
-| Real RCT2 asset import and gameplay | Requires a lawfully owned local installation | Awaiting licensed test data |
+| Real RCT2 asset import and gameplay | Protected 705 MB package, automatic 2,457-file browser install, native title menu, zoom/window controls, and school sandbox policy | Passed on the live school site |
 | Lowest-spec managed Chromebook soak | Requires the district’s actual hardware | Not yet proven |
-| Production Vercel deployment | [Public launcher](https://openrct2-classroom-web.vercel.app); each new commit is promoted only after CI | Live |
+| Production school deployment | [Password-protected Parkworks](https://parkworks.upsidedownatlas.com); Cloudflare Tunnel to loopback-only Caddy | Live |
 
 The project is intentionally not called “complete” until the same production commit passes the real-device and licensed-gameplay gates in [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ## Student flow
 
-1. Open the HTTPS site in a current managed Chrome browser.
+1. Open the password-protected HTTPS school site in a current managed Chrome browser.
 2. Choose **Classroom lite** on a 4 GB Chromebook.
-3. Select a ZIP made from a legally licensed RCT2/RCT Classic installation. The ZIP must contain `Data/ch.dat`.
-4. Wait for the local import to finish. The ZIP is read in the browser and is never uploaded.
-5. Open the park and use the normal in-game save menu.
-6. Export a Parkworks save backup at the end of class and store it in Google Drive or another approved location.
+3. Choose **Open the park**. On first launch, the protected package downloads and installs automatically into private browser storage.
+4. Open **New Game** from OpenRCT2's title menu and choose a starting map. Parkworks applies no-money play, native sandbox tools, a have-fun objective, and complete research to the loaded park.
+5. Use OpenRCT2's native full-screen controls and normal in-game save menu.
+6. Reload to the launcher when class is over, export a Parkworks save backup, and store it in Google Drive or another approved location.
 
 See [the one-page student guide](docs/STUDENT_GUIDE.md).
 
 ## Architecture
 
 ```text
-Vercel / static host
+Protected school server / Cloudflare Tunnel
   ├─ student launcher (Vite + TypeScript)
   ├─ custom OpenRCT2 JS/WASM (GPLv3, network disabled)
-  └─ open-source OpenRCT2 objects
+  ├─ open-source OpenRCT2 objects
+  └─ separately mounted licensed package (Basic Auth, no-store)
 
 Chromebook browser only
-  ├─ imported proprietary RCT2 files → IndexedDB /RCT
+  ├─ automatically installed RCT2 files → IndexedDB /RCT
   ├─ OpenRCT2 data                    → IndexedDB /OpenRCT2
   ├─ saves, autosaves, config         → IndexedDB /persistent
   └─ exported backup ZIP + SHA-256 manifest
@@ -109,7 +110,7 @@ The corresponding-source package now includes the exact source patch, immutable 
 
 ## Deployment
 
-`vercel.json` supplies HTTPS production behavior, cross-origin isolation, a restrictive CSP, permissions policy, no-referrer, nosniff, and immutable caching for versioned engine assets. Deployment is static; no database or server credentials are required.
+`vercel.json` remains the public static rollback configuration. The live school release uses equivalent headers in Caddy, Basic Auth, a loopback-only Docker origin, and an outbound Cloudflare Tunnel. Licensed assets are mounted outside Git and `dist`, served with private/no-store headers, and excluded from the service worker. See [deploy/README.md](deploy/README.md).
 
 The same output also works on a school-controlled static server if it preserves the headers documented in [docs/ADMIN_RUNBOOK.md](docs/ADMIN_RUNBOOK.md).
 

@@ -23,6 +23,7 @@ function parentOf(path: string): string {
 export class MemoryFs implements OpenRct2Fs {
   readonly filesystems = { IDBFS: {} };
   readonly syncCalls: boolean[] = [];
+  private readonly syncFailures = new Map<number, unknown>();
   private readonly nodes = new Map<string, MemoryNode>([["/", { directory: true }]]);
 
   analyzePath(path: string): { exists: boolean } {
@@ -104,7 +105,12 @@ export class MemoryFs implements OpenRct2Fs {
 
   syncfs(populate: boolean, callback: (error?: unknown) => void): void {
     this.syncCalls.push(populate);
-    queueMicrotask(() => callback());
+    const failure = this.syncFailures.get(this.syncCalls.length);
+    queueMicrotask(() => callback(failure));
+  }
+
+  failSyncCall(callNumber: number, error: unknown = new Error("Injected sync failure")): void {
+    this.syncFailures.set(callNumber, error);
   }
 
   unlink(path: string): void {

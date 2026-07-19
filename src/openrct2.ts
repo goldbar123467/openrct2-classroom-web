@@ -9,11 +9,128 @@ import {
   safeRelativeZipPath,
   type PerformanceProfile,
 } from "./engine-utils";
+import { buildGameStartupArguments, type GameLaunchTarget } from "./game-launch";
+import type { SchoolParkLibraryManifest } from "./school-park-library";
 
 const ENGINE_BASE = "/engine";
-const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-classroom2`;
+const ENGINE_QUERY = `?v=${ENGINE_COMMIT.slice(0, 12)}-school5`;
 const ENGINE_ASSET_LIMIT = 250_000_000;
 const ENGINE_ASSET_ENTRY_LIMIT = 5_000;
+const SCHOOL_SANDBOX_PLUGIN_PATH = "/persistent/plugin/parkworks-school-sandbox.js";
+export const SCHOOL_SANDBOX_READY_SENTINEL = "PARKWORKS_SCHOOL_SANDBOX_READY";
+
+const CRC32_TABLE = new Uint32Array(256);
+for (let index = 0; index < CRC32_TABLE.length; index += 1) {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) {
+    value = (value & 1) === 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  }
+  CRC32_TABLE[index] = value >>> 0;
+}
+
+export function crc32(data: Uint8Array): number {
+  let value = 0xffffffff;
+  for (const byte of data) {
+    value = (CRC32_TABLE[(value ^ byte) & 0xff] ?? 0) ^ (value >>> 8);
+  }
+  return (value ^ 0xffffffff) >>> 0;
+}
+
+export const SCHOOL_SANDBOX_PLUGIN = String.raw`var schoolSandboxRun = 0;
+
+function scheduleSchoolSandbox() {
+    schoolSandboxRun += 1;
+    var run = schoolSandboxRun;
+    context.setTimeout(function () {
+        applySchoolSandbox(run, 0);
+    }, 250);
+}
+
+function applySchoolSandbox(run, step) {
+    if (run !== schoolSandboxRun) {
+        return;
+    }
+
+    if (context.mode !== "normal") {
+        context.setTimeout(function () {
+            applySchoolSandbox(run, step);
+        }, 250);
+        return;
+    }
+
+    if (step === 0) {
+        park.cash = 1000000000;
+    } else if (step === 1) {
+        park.setFlag("noMoney", true);
+    } else if (step === 2) {
+        cheats.sandboxMode = true;
+    } else if (step === 3) {
+        cheats.ignoreResearchStatus = true;
+    } else if (step === 4) {
+        cheats.enableAllDrawableTrackPieces = true;
+    } else if (step === 5) {
+        cheats.showAllOperatingModes = true;
+    } else if (step === 6) {
+        park.setFlag("unlockAllPrices", true);
+    } else if (step === 7) {
+        park.research.funding = 0;
+    } else {
+        context.paused = false;
+        var verified =
+            park.cash === 1000000000 &&
+            park.getFlag("noMoney") &&
+            park.getFlag("unlockAllPrices") &&
+            cheats.sandboxMode &&
+            cheats.ignoreResearchStatus &&
+            cheats.enableAllDrawableTrackPieces &&
+            cheats.showAllOperatingModes &&
+            park.research.funding === 0 &&
+            context.paused === false;
+        if (!verified) {
+            context.setTimeout(function () {
+                applySchoolSandbox(run, 0);
+            }, 100);
+            return;
+        }
+        console.log("${SCHOOL_SANDBOX_READY_SENTINEL}");
+        park.postMessage({
+            type: "blank",
+            text: "School Sandbox active: unlimited money, sandbox tools, and all research unlocked."
+        });
+        return;
+    }
+
+    context.setTimeout(function () {
+        applySchoolSandbox(run, step + 1);
+    }, 50);
+}
+
+function main() {
+    context.subscribe("map.changed", function () {
+        scheduleSchoolSandbox();
+    });
+    if (context.mode === "normal") {
+        scheduleSchoolSandbox();
+    }
+}
+
+registerPlugin({
+    name: "Parkworks School Sandbox",
+    version: "2.0.0",
+    authors: ["Parkworks"],
+    type: "intransient",
+    licence: "MIT",
+    targetApiVersion: 116,
+    main: main
+});
+`;
+
+function engineAssetUrl(fileName: string): string {
+  // Use the credential-free origin even when a test navigates with Basic Auth
+  // userinfo embedded in the document URL. Browsers reject credential-bearing
+  // Request URLs before the Authorization header can be reused.
+  return new URL(`${ENGINE_BASE}/${fileName}${ENGINE_QUERY}`, window.location.origin).href;
+}
 
 export type ProgressPhase = "checking" | "engine" | "open-assets" | "game-assets" | "storage" | "ready";
 
@@ -66,6 +183,7 @@ declare global {
   interface Window {
     OPENRCT2_WEB?: (options: OpenRct2FactoryOptions) => Promise<OpenRct2Module>;
     __parkworksModule?: OpenRct2Module;
+    __parkworksSandboxReady?: boolean;
   }
 }
 
@@ -115,7 +233,7 @@ async function loadEngineScript(): Promise<void> {
   if (window.OPENRCT2_WEB) return;
   await new Promise<void>((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `${ENGINE_BASE}/openrct2.js${ENGINE_QUERY}`;
+    script.src = engineAssetUrl("openrct2.js");
     script.async = true;
     script.addEventListener("load", () => resolve(), { once: true });
     script.addEventListener("error", () => reject(new Error("The OpenRCT2 engine could not be downloaded.")), { once: true });
@@ -228,14 +346,15 @@ async function fetchBytes(url: string, reporter: ProgressReporter, phase: Progre
 async function installOpenAssets(module: OpenRct2Module, reporter: ProgressReporter): Promise<void> {
   const fs = module.FS;
   const markerPath = "/OpenRCT2/version";
+  const layoutVersion = `${ENGINE_VERSION}:browser-root-v2`;
   if (pathExists(fs, markerPath)) {
     const existing = fs.readFile(markerPath, { encoding: "utf8" });
-    if (existing === ENGINE_VERSION) return;
+    if (existing === layoutVersion) return;
   }
 
   reporter({ phase: "open-assets", message: "Preparing OpenRCT2’s open-source park objects…" });
   const archiveBytes = await fetchBytes(
-    `${ENGINE_BASE}/assets.zip${ENGINE_QUERY}`,
+    engineAssetUrl("assets.zip"),
     reporter,
     "open-assets",
     "open-source park objects",
@@ -249,8 +368,10 @@ async function installOpenAssets(module: OpenRct2Module, reporter: ProgressRepor
   for (let index = 0; index < entries.length; index += 1) {
     const entry = entries[index];
     if (!entry) continue;
-    const relative = safeRelativeZipPath(entry.name, "");
-    if (!relative) throw new Error("The engine asset pack contains an unsafe path.");
+    const archiveRelative = safeRelativeZipPath(entry.name, "");
+    if (!archiveRelative) throw new Error("The engine asset pack contains an unsafe path.");
+    const relative = archiveRelative.startsWith("data/") ? archiveRelative.slice("data/".length) : archiveRelative;
+    if (!relative) continue;
     const data = await entry.async("uint8array");
     installedBytes += data.byteLength;
     if (installedBytes > ENGINE_ASSET_LIMIT) throw new Error("The engine asset pack expands beyond its safety limit.");
@@ -267,21 +388,27 @@ async function installOpenAssets(module: OpenRct2Module, reporter: ProgressRepor
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   }
-  fs.writeFile(markerPath, ENGINE_VERSION);
+  fs.writeFile(markerPath, layoutVersion);
   await syncFileSystem(module);
 }
 
 function mountPersistentFileSystems(module: OpenRct2Module): void {
   const fs = module.FS;
-  for (const path of ["/persistent", "/RCT", "/RCT-staging", "/OpenRCT2"]) {
+  const mounts = [
+    { path: "/persistent", autoPersist: true },
+    { path: "/RCT", autoPersist: false },
+    { path: "/OpenRCT2", autoPersist: false },
+  ];
+  for (const { path, autoPersist } of mounts) {
     try {
       if (!pathExists(fs, path)) fs.mkdir(path);
-      fs.mount(fs.filesystems.IDBFS, { autoPersist: true }, path);
+      fs.mount(fs.filesystems.IDBFS, autoPersist ? { autoPersist: true } : {}, path);
     } catch (error) {
       console.error(`Failed to mount browser storage at ${path}`, error);
       throw new Error(`Local browser storage could not be mounted at ${path}: ${describeUnknownError(error)}`);
     }
   }
+  if (!pathExists(fs, "/RCT-staging")) fs.mkdir("/RCT-staging");
 }
 
 function registerSaveFlush(module: OpenRct2Module): void {
@@ -307,7 +434,7 @@ export async function initializeOpenRct2(
     const factory = window.OPENRCT2_WEB;
     if (!factory) throw new Error("The OpenRCT2 browser factory is unavailable.");
 
-    const canvas = document.querySelector<HTMLCanvasElement>("#game-canvas");
+    const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
     if (!canvas) throw new Error("The game canvas is missing.");
     reporter({ phase: "engine", message: `Starting ${ENGINE_VERSION} in ${profile.label.toLowerCase()} mode…` });
 
@@ -316,10 +443,15 @@ export async function initializeOpenRct2(
       canvas,
       INITIAL_MEMORY: profile.memoryMiB * 1024 * 1024,
       PTHREAD_POOL_SIZE: profile.workers,
-      mainScriptUrlOrBlob: `${ENGINE_BASE}/openrct2.js${ENGINE_QUERY}`,
-      locateFile: (fileName) =>
-        fileName === "openrct2.wasm" ? `${ENGINE_BASE}/openrct2.wasm${ENGINE_QUERY}` : `${ENGINE_BASE}/${fileName}${ENGINE_QUERY}`,
-      print: (message) => console.info(`[OpenRCT2] ${message}`),
+      mainScriptUrlOrBlob: engineAssetUrl("openrct2.js"),
+      locateFile: (fileName) => engineAssetUrl(fileName),
+      print: (message) => {
+        console.info(`[OpenRCT2] ${message}`);
+        if (message.includes(SCHOOL_SANDBOX_READY_SENTINEL)) {
+          window.__parkworksSandboxReady = true;
+          window.dispatchEvent(new CustomEvent("parkworks:sandbox-ready"));
+        }
+      },
       printErr: (message) => console.error(`[OpenRCT2] ${message}`),
     });
 
@@ -372,7 +504,10 @@ export async function importRctArchive(
   await ensureImportCapacity(file);
 
   reporter({ phase: "game-assets", message: "Reading your RCT2 ZIP…", loaded: 0, total: file.size });
-  const archive = await JSZip.loadAsync(file, { checkCRC32: true });
+  // JSZip's checkCRC32 option inflates every entry once during load and again
+  // when it is read. Validate the central-directory CRC during the single
+  // extraction pass instead; this halves work for the 700+ MB school package.
+  const archive = await JSZip.loadAsync(file);
   const allEntries = Object.values(archive.files);
   if (allEntries.length > MAX_RCT_ENTRIES) throw new Error("That ZIP contains too many files for the classroom importer.");
   const root = findRctRoot(allEntries.map((entry) => entry.name));
@@ -395,6 +530,11 @@ export async function importRctArchive(
     const relative = safeRelativeZipPath(entry.name, root);
     if (!relative) continue;
     const data = await entry.async("uint8array");
+    const expectedCrc32 = (entry as typeof entry & { _data?: { crc32?: number } })._data?.crc32;
+    if (typeof expectedCrc32 !== "number" || crc32(data) !== (expectedCrc32 >>> 0)) {
+      clearTree(fs, "/RCT-staging");
+      throw new Error(`The ZIP entry ${entry.name} failed its CRC integrity check.`);
+    }
     expandedBytes += data.byteLength;
     if (expandedBytes > MAX_RCT_UNCOMPRESSED_BYTES) {
       clearTree(fs, "/RCT-staging");
@@ -430,7 +570,6 @@ export async function importRctArchive(
   }
   await syncFileSystem(module);
   clearTree(fs, "/RCT-staging");
-  await syncFileSystem(module);
   await navigator.storage?.persist?.();
   localStorage.setItem(
     "parkworks.rctImport",
@@ -442,19 +581,98 @@ export function hasRctData(module: OpenRct2Module): boolean {
   return pathExists(module.FS, "/RCT/Data/ch.dat");
 }
 
+function upsertGeneralSetting(config: string, key: string, value: string): string {
+  const newline = config.includes("\r\n") ? "\r\n" : "\n";
+  const lines = config ? config.split(/\r?\n/) : [];
+  const generalStart = lines.findIndex((line) => /^\s*\[general\]\s*$/i.test(line));
+  if (generalStart === -1) {
+    if (lines.length && lines.at(-1) !== "") lines.push("");
+    lines.push("[general]", `${key} = ${value}`);
+    return `${lines.join(newline)}${newline}`;
+  }
+
+  const nextSectionOffset = lines.slice(generalStart + 1).findIndex((line) => /^\s*\[[^\]]+\]\s*$/.test(line));
+  const generalEnd = nextSectionOffset === -1 ? lines.length : generalStart + 1 + nextSectionOffset;
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const settingPattern = new RegExp(`^\\s*${escapedKey}\\s*=`, "i");
+  const settingIndex = lines.slice(generalStart + 1, generalEnd).findIndex((line) => settingPattern.test(line));
+  if (settingIndex === -1) lines.splice(generalStart + 1, 0, `${key} = ${value}`);
+  else lines[generalStart + 1 + settingIndex] = `${key} = ${value}`;
+  return lines.join(newline);
+}
+
+async function prepareBrowserStartupConfig(
+  module: OpenRct2Module,
+  viewport: { width: number; height: number },
+): Promise<void> {
+  const configPath = "/persistent/config.ini";
+  const existing = pathExists(module.FS, configPath)
+    ? module.FS.readFile(configPath, { encoding: "utf8" })
+    : "";
+  const source = typeof existing === "string" ? existing : new TextDecoder().decode(existing);
+  let configured = upsertGeneralSetting(source, "infer_display_dpi", "false");
+  configured = upsertGeneralSetting(configured, "window_scale", "1.000000");
+  configured = upsertGeneralSetting(configured, "window_width", String(viewport.width));
+  configured = upsertGeneralSetting(configured, "window_height", String(viewport.height));
+  if (configured !== source) {
+    module.FS.writeFile(configPath, configured);
+    await syncFileSystem(module);
+  }
+}
+
+export async function installSchoolSandboxPlugin(module: OpenRct2Module): Promise<void> {
+  ensureDirectory(module.FS, "/persistent/plugin");
+  const existing = pathExists(module.FS, SCHOOL_SANDBOX_PLUGIN_PATH)
+    ? module.FS.readFile(SCHOOL_SANDBOX_PLUGIN_PATH, { encoding: "utf8" })
+    : "";
+  const source = typeof existing === "string" ? existing : new TextDecoder().decode(existing);
+  if (source !== SCHOOL_SANDBOX_PLUGIN) {
+    module.FS.writeFile(SCHOOL_SANDBOX_PLUGIN_PATH, SCHOOL_SANDBOX_PLUGIN);
+    await syncFileSystem(module);
+  }
+}
+
 export async function clearRctData(module: OpenRct2Module): Promise<void> {
   clearTree(module.FS, "/RCT");
   await syncFileSystem(module);
   localStorage.removeItem("parkworks.rctImport");
 }
 
-export async function startGame(module: OpenRct2Module): Promise<void> {
+export async function startGame(
+  module: OpenRct2Module,
+  target: GameLaunchTarget = { kind: "main-menu" },
+  libraryManifest: SchoolParkLibraryManifest | null = null,
+): Promise<void> {
   if (gameStarted) return;
   if (!hasRctData(module)) throw new Error("Add your licensed RCT2 files before opening the park.");
-  gameStarted = true;
   module.canvas.hidden = false;
   module.canvas.focus();
-  module.callMain(["--user-data-path=/persistent/", "--openrct2-data-path=/OpenRCT2/"]);
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+  const rect = module.canvas.getBoundingClientRect();
+  const viewport = {
+    width: Math.max(640, Math.round(rect.width || window.innerWidth)),
+    height: Math.max(480, Math.round(rect.height || window.innerHeight)),
+  };
+  // Match SDL's drawing buffer to the CSS viewport before OpenRCT2 installs its
+  // input handlers. A stretched 1280x720 buffer makes pointer coordinates drift.
+  module.canvas.width = viewport.width;
+  module.canvas.height = viewport.height;
+  // OpenRCT2's desktop DPI inference divides by an SDL window width that is zero during browser startup.
+  await prepareBrowserStartupConfig(module, viewport);
+  await installSchoolSandboxPlugin(module);
+  window.__parkworksSandboxReady = false;
+  try {
+    module.callMain(buildGameStartupArguments(target, libraryManifest));
+  } catch (error) {
+    // emscripten_set_main_loop(..., simulateInfiniteLoop = 1) deliberately
+    // unwinds callMain after registering the browser's animation loop.
+    const message = error instanceof Error ? error.message : String(error);
+    if (message !== "unwind") {
+      module.canvas.hidden = true;
+      throw error;
+    }
+  }
+  gameStarted = true;
 }
 
 export function setGamePaused(module: OpenRct2Module, paused: boolean): void {

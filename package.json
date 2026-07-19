@@ -19,7 +19,7 @@
     "verify:sbom": "npm sbom --sbom-format cyclonedx | node scripts/validate-sbom.mjs",
     "verify:security": "npm audit --audit-level=high && npm run verify:secrets && npm run verify:licenses && npm run verify:sbom",
     "evidence:dist": "node scripts/hash-dist.mjs",
-    "check": "npm run verify:assets && npm test && npm run build",
+    "check": "npm run verify:assets && npm test && npm run build && npm run verify:assets",
     "check:ci": "npm run check && npm run verify:security"
   },
   "dependencies": {

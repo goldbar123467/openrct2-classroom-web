@@ -2,9 +2,12 @@ import JSZip from "jszip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAX_RCT_ZIP_BYTES } from "../src/engine-utils";
 import {
+  SCHOOL_SANDBOX_PLUGIN,
   clearRctData,
+  crc32,
   hasRctData,
   importRctArchive,
+  installSchoolSandboxPlugin,
   walkFiles,
   type ProgressReporter,
 } from "../src/openrct2";
@@ -50,6 +53,10 @@ describe("licensed RCT2 archive transaction", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it("validates ZIP entries with the standard CRC-32 checksum in one extraction pass", () => {
+    expect(crc32(new TextEncoder().encode("123456789"))).toBe(0xcbf43926);
+  });
+
   it("installs a valid synthetic structure through staging and removes it on request", async () => {
     const module = createMemoryModule();
     const fs = module.FS as MemoryFs;
@@ -68,6 +75,24 @@ describe("licensed RCT2 archive transaction", () => {
     await clearRctData(module);
     expect(hasRctData(module)).toBe(false);
     expect(localStorage.getItem("parkworks.rctImport")).toBeNull();
+  });
+
+  it("installs the school sandbox as an idempotent OpenRCT2 user plugin", async () => {
+    const module = createMemoryModule();
+    const fs = module.FS as MemoryFs;
+
+    await installSchoolSandboxPlugin(module);
+
+    expect(fs.readFile("/persistent/plugin/parkworks-school-sandbox.js", { encoding: "utf8" }))
+      .toBe(SCHOOL_SANDBOX_PLUGIN);
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain("context.setTimeout");
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain('park.setFlag("noMoney", true)');
+    expect(SCHOOL_SANDBOX_PLUGIN).toContain("context.paused = false");
+    expect(SCHOOL_SANDBOX_PLUGIN).not.toContain('context.subscribe("interval.tick"');
+    expect(fs.syncCalls).toEqual([false]);
+
+    await installSchoolSandboxPlugin(module);
+    expect(fs.syncCalls).toEqual([false]);
   });
 
   it("contains traversal-like names inside the private RCT mount", async () => {

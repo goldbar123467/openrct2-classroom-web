@@ -4,6 +4,7 @@
   "upstreamCommit": "9de2d43fb6e7d6a6213336125a4afbddf8cc167c",
   "githubActionsRun": "29610479932",
   "retrievedAt": "2026-07-17T20:28:36Z",
+  "builtAt": "2026-07-19T01:12:42Z",
   "sourceBuild": {
     "containerImage": "ghcr.io/openrct2/openrct2-build@sha256:0e1daa8e3f5a1c6951179aeab5c5de471ea705cb5f756bfb6e0ae5162b7e67be",
     "patch": "scripts/engine-lite.patch",
@@ -13,6 +14,7 @@
     "pthreadPoolSize": 4,
     "buildJobs": 1,
     "emccCores": 1,
+    "binaryenCores": 1,
     "linkerThreads": 1,
     "ipoDisabled": true,
     "hermeticContainerFilesystem": true
@@ -20,16 +22,20 @@
   "modifications": [
     "Default WebAssembly initial memory reduced from 2048 MiB to 512 MiB.",
     "Fixed 120-thread worker pool replaced by a wrapper-controlled pool capped at four workers.",
-    "Interprocedural optimization disabled; Ninja compilation, Emscripten and Binaryen subprocesses, and wasm-ld pinned to one job on the immutable container filesystem for byte reproducibility."
+    "Interprocedural optimization disabled; Ninja compilation, Emscripten and Binaryen subprocesses, and wasm-ld pinned to one job on the immutable container filesystem for byte reproducibility.",
+    "Browser builds initialize repositories synchronously and leave the inhibited preloader before starting the Emscripten loop.",
+    "Browser canvas resize recovers from SDL's transient hidden or zero-size setup state.",
+    "The Emscripten hardware renderer selects a supported four-byte texture and resets its viewport after resize.",
+    "The native title-menu scenario callback opens the matching verified ParkworksLibrary snapshot and fails closed when a school-library entry is missing."
   ],
   "files": {
     "public/engine/openrct2.js": {
-      "bytes": 280641,
-      "sha256": "4241cc8f2fe41adf049824a7e58959bb9a3c1305af2479f7861d8673ab9948d4"
+      "bytes": 280299,
+      "sha256": "b583dcb2fb11eed0c92a6a0c2e258088a5d1c10eda9b64f20e93b86c7169a765"
     },
     "public/engine/openrct2.wasm": {
-      "bytes": 15273506,
-      "sha256": "bde90a0e5ba3041c6235e64d038d5dd808995401f383e6d79890b9cfcd9c3467"
+      "bytes": 15154087,
+      "sha256": "2bef95f4756539ba4408abd1cfdd545f1c8bfe3e29e04e609b8b03ddb61a4a83"
     },
     "public/engine/assets.zip": {
       "bytes": 71513944,

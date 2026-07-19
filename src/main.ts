@@ -23,15 +23,42 @@ import {
   hasRctData,
   importRctArchive,
   initializeOpenRct2,
-  isGameStarted,
   pathExists,
-  setGamePaused,
   startGame,
   type OpenRct2Module,
   type ProgressUpdate,
 } from "./openrct2";
+import { resolveGameLaunchTarget } from "./game-launch";
+import {
+  ensureSchoolParkLibrary,
+  recoverSchoolParkLibraryTransaction,
+  type InstalledSchoolParkLibrary,
+} from "./school-park-library";
 
 const BUILD_COMMIT = __BUILD_COMMIT__;
+const configuredSchoolAssetUrl = import.meta.env.VITE_SCHOOL_ASSET_URL?.trim() ?? "";
+const configuredSchoolAssetVersion = import.meta.env.VITE_SCHOOL_ASSET_VERSION?.trim() ?? "";
+const configuredSchoolParkLibraryManifestUrl = import.meta.env.VITE_SCHOOL_PARK_LIBRARY_MANIFEST_URL?.trim() ?? "";
+const configuredSchoolParkLibraryVersion = import.meta.env.VITE_SCHOOL_PARK_LIBRARY_VERSION?.trim() ?? "";
+
+function resolveSchoolAssetUrl(value: string): URL | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value, window.location.origin);
+    const isSafeSchoolPath =
+      url.origin === window.location.origin &&
+      url.pathname.startsWith("/licensed/") &&
+      !url.username &&
+      !url.password &&
+      !url.hash;
+    return isSafeSchoolPath ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+const schoolAssetUrl = resolveSchoolAssetUrl(configuredSchoolAssetUrl);
+const schoolParkLibraryManifestUrl = resolveSchoolAssetUrl(configuredSchoolParkLibraryManifestUrl);
 
 interface NavigatorWithHints extends Navigator {
   deviceMemory?: number;
@@ -51,6 +78,7 @@ let selectedProfile: PerformanceProfile = savedProfile
 let moduleInstance: OpenRct2Module | null = null;
 let initializePromise: Promise<OpenRct2Module> | null = null;
 let importController: AbortController | null = null;
+let installedSchoolParkLibrary: InstalledSchoolParkLibrary | null = null;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("Parkworks could not find its application root.");
@@ -77,14 +105,14 @@ app.innerHTML = `
           The open-source OpenRCT2 engine stays here. Your licensed RCT2 game files and every park save stay in this browser—never uploaded.
         </p>
 
-        <ol class="route-map" aria-label="Three setup steps">
-          <li class="route-stop is-complete" id="step-browser">
+        <ol class="route-map" aria-label="Three launch steps">
+          <li class="route-stop" id="step-download">
             <span class="stop-number">1</span>
-            <div><strong>Chromebook check</strong><small id="browser-check-copy">Checking browser support…</small></div>
+            <div><strong>Sign in to Parkworks</strong><small id="download-step-copy">Use the protected classroom site</small></div>
           </li>
           <li class="route-stop" id="step-assets">
             <span class="stop-number">2</span>
-            <div><strong>Add licensed RCT2 files</strong><small id="asset-step-copy">One private import on this device</small></div>
+            <div><strong>Install game files</strong><small id="asset-step-copy">Automatic on first launch</small></div>
           </li>
           <li class="route-stop" id="step-play">
             <span class="stop-number">3</span>
@@ -93,14 +121,18 @@ app.innerHTML = `
         </ol>
 
         <div class="primary-actions" id="primary-actions">
-          <label class="ticket-button ticket-button-secondary" for="rct-file-input">
+          <div class="school-delivery-note" id="school-delivery-note" hidden>
+            <span aria-hidden="true">✓</span>
+            <span><b>School files are ready</b><small id="school-download-version">Installed automatically on first launch</small></span>
+          </div>
+          <label class="ticket-button ticket-button-secondary" id="manual-file-action" for="rct-file-input">
             <span aria-hidden="true">＋</span>
             <span><b>Add game files</b><small>Choose your RCT2 .zip</small></span>
           </label>
           <input class="visually-hidden" id="rct-file-input" type="file" accept=".zip,application/zip" />
           <button class="ticket-button ticket-button-primary" id="play-button" type="button">
             <span aria-hidden="true">▶</span>
-            <span><b>Open the park</b><small id="play-button-copy">Prepare this Chromebook</small></span>
+            <span><b id="play-button-label">Open main menu</b><small id="play-button-copy">Prepare this Chromebook</small></span>
           </button>
         </div>
 
@@ -112,10 +144,10 @@ app.innerHTML = `
         <p class="error-message" id="error-message" role="alert" hidden></p>
 
         <details class="zip-instructions">
-          <summary>How do I make the RCT2 ZIP?</summary>
+          <summary id="asset-help-summary">What happens to the selected ZIP?</summary>
           <div>
-            <p>On a computer where you legally own RCT2 or RCT Classic, compress the complete game folder. The ZIP must contain <code>Data/ch.dat</code>. Transfer that ZIP to the Chromebook, then choose it here.</p>
-            <p>OpenRCT2 is free software; the original RCT2 graphics and sounds are not. Parkworks does not upload or distribute them.</p>
+            <p id="asset-help-copy">Select a ZIP from your licensed RCT2 installation. Parkworks validates <code>Data/ch.dat</code> before installing anything.</p>
+            <p>After installation, the files remain in private browser storage and do not need to download again on later launches.</p>
           </div>
         </details>
       </section>
@@ -129,6 +161,7 @@ app.innerHTML = `
           <div class="ticket-notch" aria-hidden="true"></div>
           <p class="mini-label">This Chromebook</p>
           <h2 id="system-title">Classroom-ready profile</h2>
+          <p class="browser-check-copy" id="browser-check-copy">Checking required Chrome features…</p>
           <div class="system-readout">
             <span><b id="memory-value">4 GB</b><small>memory hint</small></span>
             <span><b id="core-value">4</b><small>CPU threads</small></span>
@@ -172,15 +205,7 @@ app.innerHTML = `
   </div>
 
   <section class="game-shell" id="game-shell" hidden aria-label="OpenRCT2 game">
-    <canvas id="game-canvas" tabindex="0" hidden aria-label="OpenRCT2 game canvas"></canvas>
-    <button class="game-dock-button" id="open-launcher" type="button" aria-label="Open Parkworks controls">
-      <span aria-hidden="true">PW</span><small>Controls</small>
-    </button>
-    <div class="game-controls" id="game-controls" hidden>
-      <button type="button" id="close-launcher">Return to game</button>
-      <button type="button" id="fullscreen-button">Fullscreen</button>
-      <button type="button" id="game-export-saves">Back up saves</button>
-    </div>
+    <canvas id="canvas" tabindex="0" hidden aria-label="OpenRCT2 game canvas"></canvas>
   </section>
 
   <dialog id="help-dialog" class="paper-dialog">
@@ -205,7 +230,7 @@ app.innerHTML = `
       <p class="dialog-kicker">About, privacy & accessibility</p>
       <h2>Open engine. Private game data.</h2>
       <p>Parkworks packages a modified browser build of OpenRCT2 under GPLv3. The exact engine source, modifications, build recipe, and license are available in the linked public source repository.</p>
-      <p>OpenRCT2 requires files from a legally owned copy of RollerCoaster Tycoon 2 or RollerCoaster Tycoon Classic. Those files remain in IndexedDB on this Chromebook and are not sent to Parkworks, Vercel, GitHub, or a teacher.</p>
+      <p>OpenRCT2 requires files from a legally licensed copy of RollerCoaster Tycoon 2 or RollerCoaster Tycoon Classic. After installation, those files remain in IndexedDB on this Chromebook and are not uploaded back to Parkworks, Vercel, GitHub, or a teacher.</p>
       <p>The setup wrapper supports keyboard navigation, visible focus, reduced motion, and high contrast. The original game canvas is highly visual and is not fully compatible with screen readers; teachers should provide a paired-player or alternative activity when needed.</p>
       <p><a href="https://github.com/goldbar123467/openrct2-classroom-web" rel="noopener noreferrer">View source and GPL notices</a></p>
     </form>
@@ -238,12 +263,14 @@ const progressTrain = byId<HTMLElement>("progress-train");
 const errorMessage = byId<HTMLParagraphElement>("error-message");
 const playButton = byId<HTMLButtonElement>("play-button");
 const rctFileInput = byId<HTMLInputElement>("rct-file-input");
+const primaryActions = byId<HTMLDivElement>("primary-actions");
+const manualFileAction = byId<HTMLLabelElement>("manual-file-action");
+const schoolDeliveryNote = byId<HTMLDivElement>("school-delivery-note");
 const backupFileInput = byId<HTMLInputElement>("backup-file-input");
 const cancelImport = byId<HTMLButtonElement>("cancel-import");
 const profileSelect = byId<HTMLSelectElement>("performance-profile");
 const launcherShell = byId<HTMLDivElement>("launcher-shell");
 const gameShell = byId<HTMLElement>("game-shell");
-const gameControls = byId<HTMLDivElement>("game-controls");
 
 function setError(error: unknown): void {
   let diagnostic: Record<string, unknown> | undefined;
@@ -305,16 +332,96 @@ function renderSystemCheck(): void {
     typeof WebAssembly !== "undefined";
   const browserCopy = byId<HTMLElement>("browser-check-copy");
   browserCopy.textContent = checksPass ? "Chrome has the required game features" : "Needs secure browser isolation";
-  byId<HTMLElement>("step-browser").classList.toggle("has-error", !checksPass);
+  byId<HTMLElement>("system-title").classList.toggle("has-error", !checksPass);
 }
 
 function renderImportedState(imported: boolean): void {
   byId<HTMLElement>("asset-status").textContent = imported ? "Stored privately" : "Not added yet";
-  byId<HTMLElement>("asset-step-copy").textContent = imported ? "Licensed game files are stored locally" : "One private import on this device";
+  byId<HTMLElement>("asset-step-copy").textContent = imported
+    ? "Installed in browser storage"
+    : schoolAssetUrl
+      ? "Automatic on first launch"
+      : "Select it once on this device";
+  byId<HTMLElement>("step-download").classList.toggle("is-complete", Boolean(schoolAssetUrl));
+  byId<HTMLElement>("step-download").classList.toggle("is-active", !schoolAssetUrl);
   byId<HTMLElement>("step-assets").classList.toggle("is-complete", imported);
+  byId<HTMLElement>("step-assets").classList.toggle("is-active", !imported);
   byId<HTMLElement>("step-play").classList.toggle("is-active", imported);
-  byId<HTMLElement>("play-button-copy").textContent = imported ? "Resume from local storage" : "Prepare this Chromebook";
+  byId<HTMLElement>("play-button-label").textContent = new URLSearchParams(window.location.search).has("park")
+    ? "Open linked park"
+    : "Open main menu";
+  byId<HTMLElement>("play-button-copy").textContent = imported
+    ? "Scenarios, saves, and editors"
+    : "Prepare this Chromebook";
   byId<HTMLElement>("save-light").classList.toggle("is-on", imported);
+}
+
+function configureSchoolDelivery(): void {
+  const downloadCopy = byId<HTMLElement>("download-step-copy");
+  if (!schoolAssetUrl) {
+    schoolDeliveryNote.hidden = true;
+    manualFileAction.hidden = false;
+    rctFileInput.disabled = false;
+    rctFileInput.removeAttribute("aria-hidden");
+    rctFileInput.tabIndex = 0;
+    primaryActions.classList.remove("has-school-download");
+    downloadCopy.textContent = configuredSchoolAssetUrl
+      ? "School download configuration needs attention"
+      : "Use your licensed RCT2 ZIP";
+    return;
+  }
+  schoolDeliveryNote.hidden = false;
+  manualFileAction.hidden = true;
+  rctFileInput.disabled = true;
+  rctFileInput.setAttribute("aria-hidden", "true");
+  rctFileInput.tabIndex = -1;
+  primaryActions.classList.add("has-school-download");
+  downloadCopy.textContent = "Password-protected classroom access";
+  byId<HTMLElement>("school-download-version").textContent = configuredSchoolAssetVersion
+    ? `Automatic install · ${configuredSchoolAssetVersion}`
+    : "Installed automatically on first launch";
+  byId<HTMLElement>("asset-help-summary").textContent = "How are the school game files installed?";
+  byId<HTMLElement>("asset-help-copy").textContent =
+    "On first launch, Parkworks downloads the protected school package from this same site, validates it, and stores it privately in this browser. Students never select or upload a ZIP.";
+}
+
+async function downloadSchoolArchive(signal: AbortSignal): Promise<File> {
+  if (!schoolAssetUrl) throw new Error("The protected school game package is not configured.");
+  reportProgress({ phase: "game-assets", message: "Downloading protected school game files…" });
+  const response = await fetch(schoolAssetUrl, {
+    cache: "no-store",
+    credentials: "same-origin",
+    redirect: "error",
+    signal,
+  });
+  if (!response.ok) throw new Error(`The school game package could not be downloaded (HTTP ${response.status}).`);
+  const expectedBytes = Number(response.headers.get("content-length")) || undefined;
+  const blob = await response.blob();
+  if (expectedBytes && blob.size !== expectedBytes) {
+    throw new Error("The school game package download was incomplete. Reload and try again.");
+  }
+  const fileName = schoolAssetUrl.pathname.split("/").at(-1) || "rct2-school-pack.zip";
+  reportProgress({
+    phase: "game-assets",
+    message: "Protected school game files downloaded. Verifying package…",
+    loaded: blob.size,
+    total: expectedBytes ?? blob.size,
+  });
+  return new File([blob], fileName, { type: "application/zip", lastModified: Date.now() });
+}
+
+async function installSchoolArchive(module: OpenRct2Module): Promise<void> {
+  importController = new AbortController();
+  cancelImport.hidden = false;
+  try {
+    const file = await downloadSchoolArchive(importController.signal);
+    await importRctArchive(module, file, reportProgress, importController.signal);
+    renderImportedState(true);
+    await updateStorageStatus();
+  } finally {
+    importController = null;
+    cancelImport.hidden = true;
+  }
 }
 
 async function updateStorageStatus(): Promise<void> {
@@ -356,24 +463,7 @@ function openGameView(): void {
   gameShell.hidden = false;
   launcherShell.hidden = true;
   document.body.classList.add("is-playing");
-  gameControls.hidden = true;
-  byId<HTMLCanvasElement>("game-canvas").focus();
-}
-
-function openLauncherOverlay(): void {
-  launcherShell.hidden = false;
-  launcherShell.classList.add("is-overlay");
-  gameControls.hidden = false;
-  if (moduleInstance) setGamePaused(moduleInstance, true);
-  byId<HTMLButtonElement>("close-launcher").focus();
-}
-
-function closeLauncherOverlay(): void {
-  launcherShell.hidden = true;
-  launcherShell.classList.remove("is-overlay");
-  gameControls.hidden = true;
-  if (moduleInstance) setGamePaused(moduleInstance, false);
-  byId<HTMLCanvasElement>("game-canvas").focus();
+  byId<HTMLCanvasElement>("canvas").focus();
 }
 
 async function askConfirmation(title: string, copy: string, actionLabel: string): Promise<boolean> {
@@ -396,6 +486,7 @@ for (const profile of listPerformanceProfiles()) {
 }
 renderProfile(selectedProfile);
 renderSystemCheck();
+configureSchoolDelivery();
 renderImportedState(Boolean(localStorage.getItem("parkworks.rctImport")));
 byId<HTMLTimeElement>("today-label").textContent = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date());
 
@@ -411,21 +502,41 @@ profileSelect.addEventListener("change", () => {
   renderProfile(next);
 });
 
-playButton.addEventListener("click", async () => {
+async function launchGame(): Promise<void> {
   try {
     const module = await ensureEngine();
+    if (!hasRctData(module) && schoolAssetUrl) await installSchoolArchive(module);
     if (!hasRctData(module)) {
-      setError("Add a ZIP from a legally owned RCT2 or RCT Classic installation first.");
+      setError("Add your RCT2 or RCT Classic ZIP before opening the park.");
       rctFileInput.focus();
       return;
     }
     reportProgress({ phase: "ready", message: "Opening your park…" });
-    await startGame(module);
+    if (schoolParkLibraryManifestUrl && configuredSchoolParkLibraryVersion) {
+      await recoverSchoolParkLibraryTransaction(module);
+      installedSchoolParkLibrary = await ensureSchoolParkLibrary(
+        module,
+        schoolParkLibraryManifestUrl.href,
+        configuredSchoolParkLibraryVersion,
+        reportProgress,
+      );
+    } else if (configuredSchoolParkLibraryManifestUrl || configuredSchoolParkLibraryVersion) {
+      throw new Error("The protected park library configuration is incomplete or unsafe.");
+    }
+    const target = resolveGameLaunchTarget(window.location.search, installedSchoolParkLibrary?.manifest ?? null);
     openGameView();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    await startGame(module, target, installedSchoolParkLibrary?.manifest ?? null);
   } catch (error) {
+    gameShell.hidden = true;
+    launcherShell.hidden = false;
+    document.body.classList.remove("is-playing");
+    console.error("OpenRCT2 startup failed", error);
     setError(error);
   }
-});
+}
+
+playButton.addEventListener("click", () => void launchGame());
 
 rctFileInput.addEventListener("change", async () => {
   const file = rctFileInput.files?.[0];
@@ -437,7 +548,7 @@ rctFileInput.addEventListener("change", async () => {
     await importRctArchive(module, file, reportProgress, importController.signal);
     renderImportedState(true);
     await updateStorageStatus();
-    reportProgress({ phase: "ready", message: "Game files verified and stored privately. Your park is ready." });
+    reportProgress({ phase: "ready", message: "Game files verified and installed. You may delete the downloaded ZIP; your park is ready." });
     window.setTimeout(() => {
       progressDepot.hidden = true;
     }, 1800);
@@ -468,7 +579,6 @@ async function handleExport(): Promise<void> {
 }
 
 byId<HTMLButtonElement>("export-saves").addEventListener("click", handleExport);
-byId<HTMLButtonElement>("game-export-saves").addEventListener("click", handleExport);
 
 async function handleClearGameFiles(): Promise<boolean> {
   try {
@@ -538,25 +648,6 @@ document.querySelectorAll<HTMLElement>("[data-dialog]").forEach((button) => {
     const id = button.dataset.dialog;
     if (id) byId<HTMLDialogElement>(id).showModal();
   });
-});
-
-byId<HTMLButtonElement>("open-launcher").addEventListener("click", openLauncherOverlay);
-byId<HTMLButtonElement>("close-launcher").addEventListener("click", closeLauncherOverlay);
-byId<HTMLButtonElement>("fullscreen-button").addEventListener("click", async () => {
-  try {
-    if (document.fullscreenElement) await document.exitFullscreen();
-    else await gameShell.requestFullscreen();
-  } catch (error) {
-    setError(error);
-  }
-});
-
-window.addEventListener("keydown", (event) => {
-  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "p" && isGameStarted()) {
-    event.preventDefault();
-    if (launcherShell.hidden) openLauncherOverlay();
-    else closeLauncherOverlay();
-  }
 });
 
 const networkIndicator = byId<HTMLElement>("network-indicator");

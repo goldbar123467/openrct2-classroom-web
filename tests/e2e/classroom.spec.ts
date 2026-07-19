@@ -18,8 +18,8 @@ async function bootLiteEngineInPersistentProfile(page: Page, baseURL: string, ma
     .toBe("activated");
   if (!(await page.evaluate(() => Boolean(navigator.serviceWorker.controller)))) await page.reload();
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
-  await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await page.getByRole("button", { name: /Open main menu/ }).click();
+  await expect(page.getByRole("alert")).toContainText("Add your RCT2 or RCT Classic ZIP before opening the park", { timeout: 90_000 });
   await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
 }
 
@@ -33,6 +33,7 @@ test("launcher is accessible, keyboard-operable, and stable at 200%", async ({ p
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto("/?e2e=accessibility");
   await expect(page.getByRole("heading", { name: /Your park runs on this Chromebook/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Download school game files/ })).toBeHidden();
 
   const desktopScreenshot = testInfo.outputPath("launcher-1366x768.png");
   await page.screenshot({ path: desktopScreenshot, fullPage: true });
@@ -117,9 +118,9 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
   await expect(page.locator("#offline-status")).toContainText("Launcher ready");
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
   const engineBootStarted = Date.now();
-  await page.getByRole("button", { name: /Open the park/ }).click();
+  await page.getByRole("button", { name: /Open main menu/ }).click();
 
-  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await expect(page.getByRole("alert")).toContainText("Add your RCT2 or RCT Classic ZIP before opening the park", { timeout: 90_000 });
   await expect(page.locator("#worker-value")).toHaveText("2");
   await expect(page.locator("#storage-status")).toContainText(/MB of|GB of|Available|Persistent/);
   await expect(page.locator("#offline-status")).toHaveText("Launcher + engine ready");
@@ -149,8 +150,8 @@ test("production-shaped shell boots Lite engine, persists a save, and reloads of
 
   await page.reload();
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
-  await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await page.getByRole("button", { name: /Open main menu/ }).click();
+  await expect(page.getByRole("alert")).toContainText("Add your RCT2 or RCT Classic ZIP before opening the park", { timeout: 90_000 });
   const restoredSave = await page.evaluate(() => {
     const module = (window as unknown as {
       __parkworksModule?: {
@@ -273,8 +274,8 @@ test("an app-cache update preserves IDBFS saves and clears only the legacy relea
   await page.goto("/?e2e=app-update-before");
   await page.evaluate(async () => navigator.serviceWorker.ready.then(() => true));
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
-  await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await page.getByRole("button", { name: /Open main menu/ }).click();
+  await expect(page.getByRole("alert")).toContainText("Add your RCT2 or RCT Classic ZIP before opening the park", { timeout: 90_000 });
 
   await page.evaluate(async () => {
     const module = (window as unknown as {
@@ -303,8 +304,8 @@ test("an app-cache update preserves IDBFS saves and clears only the legacy relea
   expect(await page.evaluate(() => localStorage.getItem("parkworks-e2e-update-marker"))).toBe("before-update");
 
   await page.getByRole("combobox", { name: "Performance mode" }).selectOption("lite");
-  await page.getByRole("button", { name: /Open the park/ }).click();
-  await expect(page.getByRole("alert")).toContainText("legally owned RCT2 or RCT Classic", { timeout: 90_000 });
+  await page.getByRole("button", { name: /Open main menu/ }).click();
+  await expect(page.getByRole("alert")).toContainText("Add your RCT2 or RCT Classic ZIP before opening the park", { timeout: 90_000 });
   expect(
     await page.evaluate(() => {
       const module = (window as unknown as {

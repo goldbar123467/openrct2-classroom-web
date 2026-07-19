@@ -72,7 +72,7 @@ git config core.eol lf
 git remote add origin https://github.com/OpenRCT2/OpenRCT2.git
 git fetch --quiet --filter=blob:none --depth=256 origin __COMMIT__
 git fetch --quiet --filter=blob:none --tags origin
-git checkout --quiet --detach FETCH_HEAD
+git checkout --quiet --detach __COMMIT__
 test "$(git rev-parse HEAD)" = "__COMMIT__"
 git apply --unidiff-zero --check /tmp/engine-lite.patch
 git apply --unidiff-zero /tmp/engine-lite.patch
