@@ -47,11 +47,13 @@ describe("production security configuration", () => {
 
   it("keeps every school route password-gated and licensed bytes private", () => {
     const caddy = readFileSync("deploy/Caddyfile", "utf8");
-    expect(caddy).toContain("@protected not path /healthz");
-    expect(caddy).toContain("basic_auth @protected");
+    expect(caddy).toContain("route {");
+    expect(caddy).toContain('respond /healthz "ok" 200');
+    expect(caddy).toContain("basic_auth {");
     expect(caddy).toContain("handle_path /licensed/*");
     expect(caddy).toContain('Cache-Control "private, no-store, max-age=0"');
-    expect(caddy.indexOf("basic_auth @protected")).toBeLessThan(caddy.indexOf("handle_path /licensed/*"));
+    expect(caddy.indexOf('respond /healthz "ok" 200')).toBeLessThan(caddy.indexOf("basic_auth {"));
+    expect(caddy.indexOf("basic_auth {")).toBeLessThan(caddy.indexOf("handle_path /licensed/*"));
   });
 
   it("keeps passwords and private asset coordinates out of client configuration", () => {
